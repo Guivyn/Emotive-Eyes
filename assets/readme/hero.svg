@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="440" viewBox="0 0 1200 440"
+     role="img" aria-labelledby="title desc">
+  <title id="title">ESP32 Emotive Eyes</title>
+  <desc id="desc">ESP32 and ST7796 TFT procedural emotive eyes with touch gestures and a four-state power manager.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B0F14"/>
+      <stop offset="1" stop-color="#080A0D"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="440" rx="24" fill="url(#bg)"/>
+
+  <g id="title-block" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif">
+    <rect x="64" y="48" width="288" height="36" rx="18" fill="#111821" stroke="#26343F"/>
+    <circle cx="84" cy="66" r="5" fill="#5EEAD4"/>
+    <text x="102" y="72" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#C9D4DE">ESP32 · ST7796 · TFT_eSPI</text>
+
+    <text x="62" y="146" font-size="78" font-weight="800" fill="#F6F1E7">Emotive Eyes</text>
+    <text x="64" y="196" font-size="25" fill="#C9D4DE">纯 CPU 计算的过程式表情眼睛，无需图片资源。</text>
+    <text x="64" y="232" font-size="25" fill="#C9D4DE">18 种表情预设，触摸手势与分级电源管理。</text>
+    <text x="64" y="284" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" fill="#7D8894">PlatformIO · C++ · ST7796 320×240 · 4MB Flash</text>
+  </g>
+
+  <g id="project-proof">
+    <rect x="748" y="48" width="388" height="228" rx="18" fill="#0E141B" stroke="#26343F"/>
+    <text x="770" y="78" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" fill="#7D8894">PROCEDURAL RENDER</text>
+
+    <path d="M 824 145 Q 874 108 924 145 Q 874 182 824 145 Z" fill="#F6F1E7"/>
+    <path d="M 960 145 Q 1010 108 1060 145 Q 1010 182 960 145 Z" fill="#F6F1E7"/>
+    <text x="874" y="212" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#7D8894">NORMAL</text>
+    <text x="1010" y="212" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#7D8894">NORMAL</text>
+
+    <circle cx="778" cy="246" r="5" fill="#FFB454"/>
+    <circle cx="799" cy="246" r="5" fill="#FFB454"/>
+    <circle cx="820" cy="246" r="5" fill="#FFB454"/>
+    <text x="842" y="252" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="18" fill="#C9D4DE">3× tap → Angry</text>
+    <text x="1040" y="252" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#7D8894">touch = wake</text>
+  </g>
+
+  <g id="power-states" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif">
+    <rect x="64" y="312" width="250" height="88" rx="16" fill="#0E141B" stroke="#26343F"/>
+    <circle cx="88" cy="338" r="5" fill="#5EEAD4"/>
+    <text x="104" y="344" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" fill="#5EEAD4">ACTIVE</text>
+    <text x="84" y="378" font-size="28" font-weight="700" fill="#F6F1E7">30 fps</text>
+    <text x="84" y="392" font-size="16" fill="#7D8894">backlight 100%</text>
+
+    <rect x="338" y="312" width="250" height="88" rx="16" fill="#0E141B" stroke="#26343F"/>
+    <circle cx="362" cy="338" r="5" fill="#FFB454"/>
+    <text x="378" y="344" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" fill="#FFB454">RELAX</text>
+    <text x="358" y="378" font-size="28" font-weight="700" fill="#F6F1E7">24 fps</text>
+    <text x="358" y="392" font-size="16" fill="#7D8894">backlight 50% · yawns</text>
+
+    <rect x="612" y="312" width="250" height="88" rx="16" fill="#0E141B" stroke="#26343F"/>
+    <circle cx="636" cy="338" r="5" fill="#C9D4DE"/>
+    <text x="652" y="344" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" fill="#C9D4DE">IDLE</text>
+    <text x="632" y="378" font-size="28" font-weight="700" fill="#F6F1E7">15 fps</text>
+    <text x="632" y="392" font-size="16" fill="#7D8894">backlight 25% · fixed face</text>
+
+    <rect x="886" y="312" width="250" height="88" rx="16" fill="#0E141B" stroke="#26343F"/>
+    <circle cx="910" cy="338" r="5" fill="#7D8894"/>
+    <text x="926" y="344" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" fill="#7D8894">SLEEP</text>
+    <text x="906" y="378" font-size="28" font-weight="700" fill="#F6F1E7">off</text>
+    <text x="906" y="392" font-size="16" fill="#7D8894">backlight 0% · touch-poll</text>
+  </g>
+</svg>
