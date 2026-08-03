@@ -6,8 +6,6 @@
 
 ESP32 + ST7796 TFT（320×240）上的过程式表情眼睛。所有面部几何都由 CPU 实时计算，不依赖任何预渲染图片资源，适合做成桌面 AI 宠物或互动小设备的“脸”。
 
-项目移植自 [Alastair Aitchison / playfultechnology](https://github.com/playfultechnology) 的 SH1106 OLED 版本，并重新实现为基于浮点贝塞尔边界 + 扫描线填充的过程式渲染管线。
-
 ## 运行效果
 
 开机先闭眼，2 秒后睁眼醒过来；之后开始随机眨眼、视线移动和表情切换。触摸屏幕可以立刻互动，串口会输出每一次手势和运行状态：
@@ -143,4 +141,4 @@ ESP32-demo/
 
 ## 许可
 
-本项目基于 playfultechnology 的 ESP32 OLED Emotive Eyes 移植改造，原始项目由 Alastair Aitchison 发布，遵循 MIT 许可。
+GPL-3.0
