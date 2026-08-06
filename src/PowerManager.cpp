@@ -238,10 +238,14 @@ void PowerManager::UpdateBacklight() {
   _targetBacklightLevel = target;
   if (_backlightLevel == _targetBacklightLevel) return;
   unsigned long now = millis();
-  if (now - _lastBacklightStepMs < 20) return;
+  if (now - _lastBacklightStepMs < BACKLIGHT_STEP_MS) return;
   _lastBacklightStepMs = now;
-  if (_backlightLevel < _targetBacklightLevel) _backlightLevel++;
-  else _backlightLevel--;
+  int32_t distance = abs((int32_t)_targetBacklightLevel - _backlightLevel);
+  int32_t step = distance / 6;
+  if (step < 1) step = 1;
+  if (step > 4) step = 4;
+  if (_backlightLevel < _targetBacklightLevel) _backlightLevel += step;
+  else _backlightLevel -= step;
   ApplyBacklight(_backlightLevel);
 }
 

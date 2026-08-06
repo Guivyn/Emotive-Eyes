@@ -17,7 +17,8 @@ static const unsigned long TAP_WINDOW_MS = 1500;
 static const unsigned long DOUBLE_TAP_WINDOW_MS = 300;
 static const unsigned long LONG_PRESS_MS = 2000;
 static const uint16_t TOUCH_SWIPE_THRESHOLD = 25;
-static const unsigned long SLEEP_ENTER_DELAY_MS = 3000;
+static const unsigned long SLEEP_ENTER_DELAY_MS = 2000;
+static const unsigned long BACKLIGHT_STEP_MS = 20;
 
 #ifndef TFT_BL
   #define TFT_BL 27

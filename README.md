@@ -1,6 +1,6 @@
 # ESP32 Emotive Eyes
 
-> 当前版本：1.1.0
+> 当前版本：1.1.1
 
 <p align="center">
   <img src="./assets/readme/hero.svg" width="100%" alt="ESP32 Emotive Eyes 项目概览：过程式表情眼睛、触摸交互与分级电源管理">
