@@ -2,7 +2,7 @@
 
 class Face;
 
-// Implemented in main.cpp where the complete Face class lives.
+// Adapter between the power state machine and the face behavior.
 void FacePower_EnterRelax(Face& face);
 void FacePower_EnterIdle(Face& face);
 void FacePower_EnterSleep(Face& face);

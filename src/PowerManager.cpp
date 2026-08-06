@@ -1,5 +1,7 @@
 #include "PowerManager.h"
 #include "FacePower.h"
+#include "Config.h"
+#include "Log.h"
 
 #ifndef POWER_BATTERY_SENSE_ENABLED
   #define POWER_BATTERY_SENSE_ENABLED 0
@@ -36,10 +38,10 @@ PowerManager::PowerManager(Face& face, uint8_t backlightPin)
   _ambientLevel = 100;
   _lastBacklightStepMs = 0;
   _lastLightSampleMs = 0;
-  _lastLightLogMs = 0;
   _lastTempSampleMs = 0;
   _lastStatsLogMs = 0;
   _chipTempC = 30.0f;
+  _overheatRecovery = false;
   for (int i = 0; i <= 100; i++) {
     _gammaLut[i] = (uint8_t)(255.0f * powf(i / 100.0f, 2.2f) + 0.5f);
   }
@@ -50,17 +52,16 @@ void PowerManager::Begin() {
   ApplyBacklight(0); // boot dark, then ramp up in loop()
 #if POWER_LIGHT_SENSOR_ENABLED
   analogSetPinAttenuation(LIGHT_ADC_PIN, ADC_11db);
-  analogSetPinAttenuation(35, ADC_11db); // diagnostic probe for the LDR
   SampleLight();
 #endif
 #if POWER_BATTERY_SENSE_ENABLED
   analogSetPinAttenuation(BATTERY_ADC_PIN, ADC_11db);
   analogRead(BATTERY_ADC_PIN); // settle ADC once
   SampleBattery();
-  Serial.printf("[POWER] Battery %.2fV (%u%%), state=ACTIVE\n",
+  LOG_PRINTF("[POWER] Battery %.2fV (%u%%), state=ACTIVE\n",
     _batteryV, GetBatteryPercent());
 #else
-  Serial.println("[POWER] Battery sense disabled (no divider on GPIO34 yet)");
+  LOG_PRINTLN("[POWER] Battery sense disabled (no divider on GPIO34 yet)");
 #endif
 }
 
@@ -79,21 +80,31 @@ void PowerManager::Update() {
     _lastTempSampleMs = now;
     SampleTemperature();
     if (_chipTempC >= 80.0f) {
+      _overheatRecovery = true;
       if (_state != PowerState::SLEEP) {
-        Serial.printf("[POWER] overheat %.1fC, forced SLEEP\n", _chipTempC);
+        LOG_PRINTF("[POWER] overheat %.1fC, forced SLEEP\n", _chipTempC);
       }
       SetState(PowerState::SLEEP);
     } else if (_chipTempC >= 70.0f &&
                (_state == PowerState::ACTIVE || _state == PowerState::RELAX)) {
-      Serial.printf("[POWER] warm %.1fC, forced IDLE\n", _chipTempC);
+      _overheatRecovery = true;
+      LOG_PRINTF("[POWER] warm %.1fC, forced IDLE\n", _chipTempC);
       SetState(PowerState::IDLE);
+    } else if (_chipTempC < 70.0f && _overheatRecovery) {
+      _overheatRecovery = false;
+      if (_state == PowerState::IDLE || _state == PowerState::SLEEP) {
+        LOG_PRINTF("[POWER] overheat cleared (%.1fC), resumed ACTIVE\n",
+                   _chipTempC);
+        _lastInteractionMs = now;
+        SetState(PowerState::ACTIVE);
+      }
     }
   }
 #endif
 
   if (now - _lastStatsLogMs >= 30000) {
     _lastStatsLogMs = now;
-    Serial.printf("[STATS] state=%s bl=%u interval=%ums temp=%.1fC\n",
+    LOG_PRINTF("[STATS] state=%s bl=%u interval=%ums temp=%.1fC\n",
       StateName(), _backlightLevel, GetFrameIntervalMs(), _chipTempC);
   }
 
@@ -105,6 +116,7 @@ void PowerManager::Update() {
   }
 
   if (_batteryV < CRITICAL_BATTERY_V) {
+    _overheatRecovery = false;
     SetState(PowerState::SLEEP);
   } else if (_batteryV < LOW_BATTERY_V && _state == PowerState::ACTIVE) {
     SetState(PowerState::IDLE);
@@ -144,8 +156,6 @@ uint32_t PowerManager::GetFrameIntervalMs() const {
   return 33;
 }
 
-float PowerManager::GetBatteryVolts() const { return _batteryV; }
-
 uint8_t PowerManager::GetBatteryPercent() const {
   float p = (_batteryV - BATTERY_EMPTY_V) /
             (BATTERY_FULL_V - BATTERY_EMPTY_V);
@@ -161,22 +171,22 @@ void PowerManager::SetState(PowerState s) {
     case PowerState::ACTIVE:
       SetBacklight(100);
       FacePower_Wake(_face);
-      Serial.println("[POWER] state=ACTIVE");
+      LOG_PRINTLN("[POWER] state=ACTIVE");
       break;
     case PowerState::RELAX:
       SetBacklight(50);
       FacePower_EnterRelax(_face);
-      Serial.println("[POWER] state=RELAX");
+      LOG_PRINTLN("[POWER] state=RELAX");
       break;
     case PowerState::IDLE:
       SetBacklight(25);
       FacePower_EnterIdle(_face);
-      Serial.println("[POWER] state=IDLE");
+      LOG_PRINTLN("[POWER] state=IDLE");
       break;
     case PowerState::SLEEP:
       FacePower_EnterSleep(_face);
       SetBacklight(0);
-      Serial.printf("[POWER] state=SLEEP battery=%.2fV\n", _batteryV);
+      LOG_PRINTF("[POWER] state=SLEEP battery=%.2fV\n", _batteryV);
       break;
   }
 }
@@ -253,8 +263,8 @@ void PowerManager::SampleBattery() {
 void PowerManager::EnterLightSleep() {
   // Wake on touch IRQ (GPIO36, active low) with a timer fallback so a
   // floating IRQ line cannot lock the device asleep.
-  esp_sleep_enable_ext0_wakeup(static_cast<gpio_num_t>(36), 0);
+  static const gpio_num_t TOUCH_WAKE_GPIO = static_cast<gpio_num_t>(36);
+  esp_sleep_enable_ext0_wakeup(TOUCH_WAKE_GPIO, 0);
   esp_sleep_enable_timer_wakeup(LIGHT_SLEEP_PERIOD_MS * 1000ULL);
   esp_light_sleep_start();
-  _lastInteractionMs = millis(); // treat every wake as a check point
 }

@@ -12,8 +12,9 @@ enum class PowerState : uint8_t {
 };
 
 class Face;
+class PowerManager;
 extern Face* gFace;
-extern class PowerManager* gPowerManager;
+extern PowerManager* gPowerManager;
 
 class PowerManager {
 public:
@@ -28,7 +29,6 @@ public:
   // Main-loop cadence: fast in ACTIVE, slower in RELAX/IDLE, poll-only in SLEEP.
   uint32_t GetFrameIntervalMs() const;
 
-  float GetBatteryVolts() const;
   uint8_t GetBatteryPercent() const;
   PowerState GetState() const { return _state; }
 
@@ -54,10 +54,10 @@ private:
   uint8_t _ambientLevel;         // 0-100, from the GPIO34 light sensor
   unsigned long _lastBacklightStepMs;
   unsigned long _lastLightSampleMs;
-  unsigned long _lastLightLogMs;
   unsigned long _lastTempSampleMs;
   unsigned long _lastStatsLogMs;
   float _chipTempC;
+  bool _overheatRecovery;
   uint8_t _gammaLut[101];
 
   void SetState(PowerState s);

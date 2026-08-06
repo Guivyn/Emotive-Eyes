@@ -38,6 +38,7 @@ ESP32 + ST7796 TFT（320×240）上的过程式表情眼睛。所有面部几何
 pio run
 pio run --target upload
 pio device monitor -b 115200
+pio test -e native
 ```
 
 `TFT_eSPI` 已通过 `lib_deps` 自动下载，屏幕引脚和构建开关都在 `platformio.ini` 中，无需修改 `User_Setup.h`。
@@ -110,13 +111,16 @@ Transition → Transformation → Variation1 → Variation2 → Blink → FinalC
 | `POWER_LIGHT_SLEEP_ENABLED` | 0 | GPIO36 补 10kΩ 上拉后改为 1，启用 LightSleep |
 | `POWER_LIGHT_SENSOR_ENABLED` | 0 | GPIO35 光敏自动调光（实测动态范围偏窄，默认停用） |
 | `POWER_TEMP_PROTECT_ENABLED` | 1 | 芯片温度保护 |
+| `SERIAL_DEBUG_ENABLED` | 1 | 串口调试日志；发布固件可改为 0 关闭 |
 
 ## 项目结构
 
 ```text
 ESP32-demo/
+├── .github/workflows/
+│   └── ci.yml
 ├── platformio.ini
-├── partitions.csv
+├── LICENSE
 ├── README.md
 ├── assets/readme/
 │   └── hero.svg
@@ -124,12 +128,22 @@ ESP32-demo/
 │   ├── 技术文档.md
 │   ├── ESP32-WROOM-32_引脚参考手册.md
 │   └── ESP32-WROOM-32_引脚功能图解.md
+├── test/
+│   ├── mocks/
+│   └── test_native/
 └── src/
     ├── main.cpp
-    ├── PowerManager.h
-    ├── PowerManager.cpp
+    ├── Config.h
+    ├── Log.h
+    ├── Animation.h
+    ├── Eye.h
+    ├── Eye.cpp
+    ├── Face.h
+    ├── Face.cpp
     ├── FacePower.h
-    └── _build.py
+    ├── FacePower.cpp
+    ├── PowerManager.h
+    └── PowerManager.cpp
 ```
 
 ## 已知限制
@@ -141,4 +155,6 @@ ESP32-demo/
 
 ## 许可
 
-GPL-3.0
+本项目基于 playfultechnology 的 ESP32 OLED Emotive Eyes 移植改造，原始项目由
+Alastair Aitchison 发布，遵循 MIT 许可。本仓库以 GPL-3.0 发布，完整条款见
+`LICENSE`。
