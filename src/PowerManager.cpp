@@ -3,6 +3,8 @@
 #include "Config.h"
 #include "Log.h"
 
+extern TFT_eSPI tft;
+
 #ifndef POWER_BATTERY_SENSE_ENABLED
   #define POWER_BATTERY_SENSE_ENABLED 0
 #endif
@@ -25,6 +27,11 @@ const float PowerManager::BATTERY_EMPTY_V  = 3.00f;
 static const uint8_t BATTERY_ADC_PIN = 34;
 static const float   BATTERY_DIVIDER = 2.0f;
 static const uint8_t LIGHT_ADC_PIN   = 35; // actual LDR pin on this board
+
+static const uint8_t CPU_MHZ_ACTIVE = 240;
+static const uint8_t CPU_MHZ_RELAX  = 160;
+static const uint8_t CPU_MHZ_IDLE   = 80;
+static const uint8_t CPU_MHZ_SLEEP  = 80;
 
 PowerManager::PowerManager(Face& face, uint8_t backlightPin)
   : _face(face), _backlightPin(backlightPin) {
@@ -148,12 +155,12 @@ void PowerManager::NotifyInteraction() {
 
 uint32_t PowerManager::GetFrameIntervalMs() const {
   switch (_state) {
-    case PowerState::ACTIVE: return 33;  // 30 FPS
-    case PowerState::RELAX:  return 41;  // ~24 FPS
-    case PowerState::IDLE:   return 66;  // ~15 FPS
+    case PowerState::ACTIVE: return 25;  // 40 FPS
+    case PowerState::RELAX:  return 33;  // 30 FPS
+    case PowerState::IDLE:   return 41;  // ~24 FPS
     case PowerState::SLEEP:  return 200; // touch-poll cadence, no render
   }
-  return 33;
+  return 25;
 }
 
 uint8_t PowerManager::GetBatteryPercent() const {
@@ -164,21 +171,37 @@ uint8_t PowerManager::GetBatteryPercent() const {
   return (uint8_t)(p * 100.0f);
 }
 
+static void ApplyCpuFrequency(PowerState state) {
+  uint8_t mhz = CPU_MHZ_ACTIVE;
+  switch (state) {
+    case PowerState::ACTIVE: mhz = CPU_MHZ_ACTIVE; break;
+    case PowerState::RELAX:  mhz = CPU_MHZ_RELAX;  break;
+    case PowerState::IDLE:   mhz = CPU_MHZ_IDLE;   break;
+    case PowerState::SLEEP:  mhz = CPU_MHZ_SLEEP;  break;
+  }
+  setCpuFrequencyMhz(mhz);
+  LOG_PRINTF("[POWER] cpu=%uMHz\n", getCpuFrequencyMhz());
+}
+
 void PowerManager::SetState(PowerState s) {
   if (_state == s) return;
   _state = s;
   switch (s) {
     case PowerState::ACTIVE:
+      ApplyCpuFrequency(s);
+      tft.writecommand(0x29); // DISPON
       SetBacklight(100);
       FacePower_Wake(_face);
       LOG_PRINTLN("[POWER] state=ACTIVE");
       break;
     case PowerState::RELAX:
+      ApplyCpuFrequency(s);
       SetBacklight(50);
       FacePower_EnterRelax(_face);
       LOG_PRINTLN("[POWER] state=RELAX");
       break;
     case PowerState::IDLE:
+      ApplyCpuFrequency(s);
       SetBacklight(25);
       FacePower_EnterIdle(_face);
       LOG_PRINTLN("[POWER] state=IDLE");
@@ -186,6 +209,8 @@ void PowerManager::SetState(PowerState s) {
     case PowerState::SLEEP:
       FacePower_EnterSleep(_face);
       SetBacklight(0);
+      ApplyCpuFrequency(s);
+      tft.writecommand(0x28); // DISPOFF
       LOG_PRINTF("[POWER] state=SLEEP battery=%.2fV\n", _batteryV);
       break;
   }

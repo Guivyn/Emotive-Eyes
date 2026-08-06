@@ -9,7 +9,7 @@ static constexpr uint16_t BG_COLOR = TFT_BLACK;
 static constexpr uint16_t SCREEN_WIDTH = 320;
 static constexpr uint16_t SCREEN_HEIGHT = 240;
 static constexpr uint16_t SPRITE_HEIGHT = 120;
-static constexpr uint8_t EYES_FRAME_MS_MIN = 33;
+static constexpr uint8_t EYES_FRAME_MS_MIN = 25; // 40 FPS active floor
 
 static const uint16_t TOUCH_PRESSURE_THRESHOLD = 350;
 static const uint8_t TAP_COUNT_FOR_ANGER = 3;

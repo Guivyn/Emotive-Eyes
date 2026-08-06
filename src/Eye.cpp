@@ -1,5 +1,19 @@
 #include "Eye.h"
 
+static const float COS_15[] = {
+  1.0f, 0.9659258263f, 0.8660254038f, 0.7071067812f, 0.5f, 0.2588190451f,
+  0.0f, -0.2588190451f, -0.5f, -0.7071067812f, -0.8660254038f, -0.9659258263f,
+  -1.0f, -0.9659258263f, -0.8660254038f, -0.7071067812f, -0.5f, -0.2588190451f,
+  0.0f, 0.2588190451f, 0.5f, 0.7071067812f, 0.8660254038f, 0.9659258263f
+};
+
+static const float SIN_15[] = {
+  0.0f, 0.2588190451f, 0.5f, 0.7071067812f, 0.8660254038f, 0.9659258263f,
+  1.0f, 0.9659258263f, 0.8660254038f, 0.7071067812f, 0.5f, 0.2588190451f,
+  0.0f, -0.2588190451f, -0.5f, -0.7071067812f, -0.8660254038f, -0.9659258263f,
+  -1.0f, -0.9659258263f, -0.8660254038f, -0.7071067812f, -0.5f, -0.2588190451f
+};
+
 EyeTransition::EyeTransition() : Animation(500) {
   Active = false;
   Output = EyeConfig{};
@@ -194,7 +208,6 @@ int EyeDrawer::GenerateBoundary(const EyeConfig* cfg, float cx, float cy,
   float BRx = cx + cfg->OffsetX + cfg->Width / 2.0f - rB;
   float BRy = cy + cfg->OffsetY + cfg->Height / 2.0f - rB + dYB;
 
-  const float DEG2RAD = PI / 180.0f;
   int cnt = 0;
   auto add = [&](float x, float y) {
     if (cnt < maxPts) {
@@ -203,11 +216,12 @@ int EyeDrawer::GenerateBoundary(const EyeConfig* cfg, float cx, float cy,
       cnt++;
     }
   };
+  auto cosDeg = [](int a) { return COS_15[(a / 15) % 24]; };
+  auto sinDeg = [](int a) { return SIN_15[(a / 15) % 24]; };
 
   if (rT > 0) {
     for (int a = 180; a <= 270; a += 15) {
-      float r = a * DEG2RAD;
-      add(TLx + rT * cosf(r), TLy + rT * sinf(r));
+      add(TLx + rT * cosDeg(a), TLy + rT * sinDeg(a));
     }
   } else {
     add(TLx, TLy);
@@ -215,8 +229,7 @@ int EyeDrawer::GenerateBoundary(const EyeConfig* cfg, float cx, float cy,
 
   if (rT > 0) {
     for (int a = 285; a <= 360; a += 15) {
-      float r = (a == 360) ? 0.0f : a * DEG2RAD;
-      add(TRx + rT * cosf(r), TRy + rT * sinf(r));
+      add(TRx + rT * cosDeg(a), TRy + rT * sinDeg(a));
     }
   } else {
     add(TRx, TRy);
@@ -224,8 +237,7 @@ int EyeDrawer::GenerateBoundary(const EyeConfig* cfg, float cx, float cy,
 
   if (rB > 0) {
     for (int a = 15; a <= 90; a += 15) {
-      float r = a * DEG2RAD;
-      add(BRx + rB * cosf(r), BRy + rB * sinf(r));
+      add(BRx + rB * cosDeg(a), BRy + rB * sinDeg(a));
     }
   } else {
     add(BRx, BRy);
@@ -233,8 +245,7 @@ int EyeDrawer::GenerateBoundary(const EyeConfig* cfg, float cx, float cy,
 
   if (rB > 0) {
     for (int a = 105; a <= 180; a += 15) {
-      float r = a * DEG2RAD;
-      add(BLx + rB * cosf(r), BLy + rB * sinf(r));
+      add(BLx + rB * cosDeg(a), BLy + rB * sinDeg(a));
     }
   } else {
     add(BLx, BLy);

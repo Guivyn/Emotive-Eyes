@@ -4,6 +4,7 @@
 #include "Log.h"
 #include "Face.h"
 #include "PowerManager.h"
+#include "Version.h"
 
 TFT_eSPI tft = TFT_eSPI();
 Face* gFace = nullptr;
@@ -16,6 +17,7 @@ void setup() {
 #endif
   delay(200);
   LOG_PRINTLN("\n=== ESP32 TFT Eyes - Pure Procedural ===");
+  LOG_PRINTF("[BOOT] version=%s\n", FIRMWARE_VERSION);
   LOG_PRINTF("[BOOT] Reset reason: %d\n", esp_reset_reason());
 
   // Keep the backlight off during display bring-up; PowerManager takes over.

@@ -1,5 +1,7 @@
 # ESP32 Emotive Eyes
 
+> 当前版本：1.0.0
+
 <p align="center">
   <img src="./assets/readme/hero.svg" width="100%" alt="ESP32 Emotive Eyes 项目概览：过程式表情眼睛、触摸交互与分级电源管理">
 </p>
@@ -18,7 +20,7 @@ ESP32 + ST7796 TFT（320×240）上的过程式表情眼睛。所有面部几何
 [TOUCH] Tap #2
 [TOUCH] Tap #3
 [TOUCH] Angry face triggered by taps
-[STATS] state=ACTIVE bl=100 interval=33ms temp=42.0C
+[STATS] state=ACTIVE bl=100 interval=25ms temp=42.0C
 ```
 
 ## 特性
@@ -83,12 +85,13 @@ Transition → Transformation → Variation1 → Variation2 → Blink → FinalC
 
 | 状态 | 进入条件（距上次交互） | 背光 | 刷新率 | 表情行为 |
 |------|------------------------|------|--------|----------|
-| ACTIVE | 0–60 秒 | 100% | 33ms（30fps） | 完整动画 + 随机表情 |
-| RELAX | 60 秒 | 50% | 41ms（约 24fps） | 固定表情、慢速视线、偶发哈欠 |
-| IDLE | 3 分钟 | 25% | 66ms（约 15fps） | 固定 Normal、视线回中、偶发眨眼 |
+| ACTIVE | 0–60 秒 | 100% | 25ms（40fps） | 完整动画 + 随机表情 |
+| RELAX | 60 秒 | 50% | 33ms（30fps） | 固定表情、慢速视线、偶发哈欠 |
+| IDLE | 3 分钟 | 25% | 41ms（约 24fps） | 固定 Normal、视线回中、偶发眨眼 |
 | SLEEP | 5 分钟 | 0% | 不渲染，200ms 触摸轮询 | Sleepy 闭眼静态画面 |
 
 任意触摸都会回到 ACTIVE 并重置空闲计时。背光使用 Gamma 2.2 感知曲线，状态切换时以 20ms/档平滑渐变，避免亮度跳变。
+CPU 频率随状态调整：ACTIVE 240MHz、RELAX 160MHz、IDLE 80MHz、SLEEP 80MHz；进入 SLEEP 时发送 `DISPOFF (0x28)`，唤醒时发送 `DISPON (0x29)` 降低面板功耗。
 
 ## 触摸手势
 

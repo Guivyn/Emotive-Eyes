@@ -472,6 +472,7 @@ void Face::UpdateTouch() {
 void Face::Draw() {
   if (!spriteOk) return;
 
+  uint32_t drawStartUs = micros();
   LeftEye.CenterX = CenterX - EyeSize / 2 - EyeInterDistance;
   LeftEye.CenterY = CenterY;
   RightEye.CenterX = CenterX + EyeSize / 2 + EyeInterDistance;
@@ -484,4 +485,24 @@ void Face::Draw() {
   EyeDrawer::Draw(sprite, LeftEye.CenterX, SPRITE_HEIGHT / 2, LeftEye.FinalConfig);
   EyeDrawer::Draw(sprite, RightEye.CenterX, SPRITE_HEIGHT / 2, RightEye.FinalConfig);
   sprite.pushSprite(0, CenterY - SPRITE_HEIGHT / 2);
+
+  uint32_t drawUs = micros() - drawStartUs;
+  static uint32_t perfWindowStartMs = 0;
+  static uint32_t perfFrames = 0;
+  static uint32_t perfTotalUs = 0;
+
+  uint32_t nowMs = millis();
+  if (perfWindowStartMs == 0) perfWindowStartMs = nowMs;
+  perfFrames++;
+  perfTotalUs += drawUs;
+  if (nowMs - perfWindowStartMs >= 5000) {
+    uint32_t windowMs = nowMs - perfWindowStartMs;
+    float avgDrawUs = (float)perfTotalUs / perfFrames;
+    float avgFps = perfFrames * 1000.0f / windowMs;
+    LOG_PRINTF("[PERF] avg_draw=%uus avg_fps=%.1f frames=%u\n",
+               (uint32_t)avgDrawUs, avgFps, perfFrames);
+    perfWindowStartMs = nowMs;
+    perfFrames = 0;
+    perfTotalUs = 0;
+  }
 }
