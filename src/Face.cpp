@@ -28,6 +28,19 @@ static const EyeConfig Preset_Angry = {-4, 0, 25, 50, 0.3f, 0, 2, 15};
 static const EyeConfig Preset_Furious = {-2, 0, 38, 50, 0.4f, 0, 2, 10};
 static const EyeConfig Preset_Scared = {-4, 0, 50, 50, -0.1f, 0, 15, 10};
 static const EyeConfig Preset_Awe = {2, 0, 44, 56, -0.1f, 0.1f, 15, 15};
+static const EyeConfig Preset_Coquette = {0, -6, 20, 44, 0.25f, -0.25f, 10, 8};
+
+static int16_t RawTouchToScreenX(uint16_t rawX, uint16_t rawY) {
+  int32_t x = (int32_t)rawY - 300;
+  x = x * SCREEN_WIDTH / 3600;
+  return (int16_t)(SCREEN_WIDTH - x);
+}
+
+static int16_t RawTouchToScreenY(uint16_t rawX, uint16_t rawY) {
+  int32_t y = (int32_t)rawX - 300;
+  y = y * SCREEN_HEIGHT / 3600;
+  return (int16_t)y;
+}
 
 LookAssistant::LookAssistant(Face& face)
   : _face(face), Timer(2500), _minInterval(1500), _maxInterval(3500) {
@@ -224,6 +237,16 @@ void FaceExpression::GoTo_Awe() {
   _face.LeftEye.TransitionTo(Preset_Awe);
 }
 
+void FaceExpression::GoTo_Coquette() {
+  ClearVariations();
+  _face.RightEye.Variation1.Values.OffsetY = 3;
+  _face.LeftEye.Variation1.Values.OffsetY = 3;
+  _face.RightEye.Variation1.Animation.SetTriangle(400, 0);
+  _face.LeftEye.Variation1.Animation.SetTriangle(400, 0);
+  _face.RightEye.TransitionTo(Preset_Coquette);
+  _face.LeftEye.TransitionTo(Preset_Coquette);
+}
+
 FaceBehavior::FaceBehavior(Face& face)
   : Timer(4000), _face(face) {
   Timer.Start();
@@ -246,6 +269,7 @@ FaceBehavior::FaceBehavior(Face& face)
   Emotions[Furious] = 1;
   Emotions[Scared] = 1;
   Emotions[Awe] = 1;
+  Emotions[Coquette] = 1;
 }
 
 void FaceBehavior::Clear() {
@@ -282,7 +306,7 @@ void FaceBehavior::GoToEmotion(eEmotions e) {
     static const char* emotionNames[] = {
       "Normal", "Angry", "Glee", "Happy", "Sad", "Worried", "Focused", "Annoyed",
       "Surprised", "Skeptic", "Frustrated", "Unimpressed", "Sleepy", "Suspicious",
-      "Squint", "Furious", "Scared", "Awe"
+      "Squint", "Furious", "Scared", "Awe", "Coquette"
     };
     if ((int)e >= 0 && (int)e < EMOTIONS_COUNT) {
       LOG_PRINT("[EMOTION] ");
@@ -310,6 +334,7 @@ void FaceBehavior::GoToEmotion(eEmotions e) {
     case Furious: _face.Expression.GoTo_Furious(); break;
     case Scared: _face.Expression.GoTo_Scared(); break;
     case Awe: _face.Expression.GoTo_Awe(); break;
+    case Coquette: _face.Expression.GoTo_Coquette(); break;
     default: break;
   }
 }
@@ -326,6 +351,11 @@ Face::Face(uint16_t sw, uint16_t sh, uint16_t es)
   Behavior.CurrentEmotion = Normal;
   _touchPressed = false;
   _tapCount = 0;
+  _touchStartValid = false;
+  _touchStartX = 0;
+  _touchStartY = 0;
+  _touchLastX = 0;
+  _touchLastY = 0;
   _tapWindowUntil = 0;
   _touchPressStartMs = 0;
   _longPressHandled = false;
@@ -333,6 +363,10 @@ Face::Face(uint16_t sw, uint16_t sh, uint16_t es)
   _yawnState = 0;
   _yawnEndMs = 0;
   _nextYawnMs = 0;
+  _sleeping = false;
+  _sleepRequested = false;
+  _zzzDirty = false;
+  _sleepRequestedAt = 0;
   spriteOk = false;
 
   if (sprite.createSprite(SCREEN_WIDTH, SPRITE_HEIGHT)) {
@@ -346,6 +380,36 @@ Face::Face(uint16_t sw, uint16_t sh, uint16_t es)
 
 void Face::LookFront() {
   Look.LookAt(0.0f, 0.0f);
+}
+
+void Face::GoToSleep() {
+  _sleeping = true;
+  RandomBehavior = false;
+  RandomLook = false;
+  RandomBlink = false;
+  Behavior.Timer.SetIntervalMillis(1000000UL);
+  Behavior.GoToEmotion(Sleepy);
+  RightEye.Variation1.Values.Height = 2;
+  LeftEye.Variation1.Values.Height = 2;
+  RightEye.Variation1.Animation.SetTriangle(2400, 0);
+  LeftEye.Variation1.Animation.SetTriangle(2400, 0);
+  _sleepRequested = true;
+  _sleepRequestedAt = millis();
+  _zzzDirty = true;
+  LOG_PRINTLN("[TOUCH] Sleep mode on");
+}
+
+void Face::WakeFromSleep() {
+  _sleeping = false;
+  _sleepRequested = false;
+  _zzzDirty = true;
+  RandomBehavior = true;
+  RandomLook = true;
+  RandomBlink = true;
+  Behavior.Timer.SetIntervalMillis(4000);
+  Behavior.Timer.Reset();
+  Behavior.GoToEmotion(Normal);
+  LOG_PRINTLN("[TOUCH] Wake up");
 }
 
 void Face::Begin() {
@@ -412,6 +476,10 @@ void Face::Update() {
   }
 
   UpdateTouch();
+  if (_sleepRequested && now - _sleepRequestedAt >= SLEEP_ENTER_DELAY_MS) {
+    _sleepRequested = false;
+    if (gPowerManager) gPowerManager->EnterIdle();
+  }
   if (NeedsRedraw()) Draw();
 }
 
@@ -439,10 +507,50 @@ void Face::UpdateTouch() {
   uint16_t z = tft.getTouchRawZ();
   bool pressed = z >= TOUCH_PRESSURE_THRESHOLD;
   if (pressed && !_touchPressed) {
+    if (_sleeping) WakeFromSleep();
+    uint16_t rx = 0, ry = 0;
+    tft.getTouchRaw(&rx, &ry);
+    LOG_PRINTF("[TOUCH] press z=%u raw=%u,%u\n", z, rx, ry);
+    _touchStartX = _touchLastX = RawTouchToScreenX(rx, ry);
+    _touchStartY = _touchLastY = RawTouchToScreenY(rx, ry);
+    _touchStartValid = true;
     if (gPowerManager) gPowerManager->NotifyInteraction();
     Blink.Blink();
     _touchPressStartMs = now;
     _longPressHandled = false;
+    _touchPressed = true;
+  } else if (pressed && _touchPressed) {
+    uint16_t rx = 0, ry = 0;
+    tft.getTouchRaw(&rx, &ry);
+    _touchLastX = RawTouchToScreenX(rx, ry);
+    _touchLastY = RawTouchToScreenY(rx, ry);
+    _touchStartValid = true;
+    if (!_longPressHandled && now - _touchPressStartMs >= LONG_PRESS_MS) {
+      _longPressHandled = true;
+      _tapCount = 0;
+      _doubleTapPendingUntil = 0;
+      Behavior.GoToEmotion(Normal);
+      LOG_PRINTLN("[TOUCH] Long press -> Normal");
+    }
+  } else if (!pressed && _touchPressed) {
+    _touchPressed = false;
+    if (_longPressHandled) {
+      _longPressHandled = false;
+      return;
+    }
+
+    int32_t dx = _touchStartValid ? (int32_t)_touchLastX - _touchStartX : 0;
+    int32_t dy = _touchStartValid ? (int32_t)_touchLastY - _touchStartY : 0;
+    LOG_PRINTF("[TOUCH] release start=%u,%u last=%u,%u dx=%d dy=%d\n",
+               _touchStartX, _touchStartY, _touchLastX, _touchLastY, dx, dy);
+    if (abs(dx) >= TOUCH_SWIPE_THRESHOLD ||
+        abs(dy) >= TOUCH_SWIPE_THRESHOLD) {
+      HandleSwipe(dx, dy);
+      _tapCount = 0;
+      _doubleTapPendingUntil = 0;
+      return;
+    }
+
     _tapCount++;
     LOG_PRINTF("[TOUCH] Tap #%u\n", _tapCount);
     if (_tapCount >= TAP_COUNT_FOR_ANGER) {
@@ -454,19 +562,48 @@ void Face::UpdateTouch() {
       _doubleTapPendingUntil = now + DOUBLE_TAP_WINDOW_MS;
     }
     _tapWindowUntil = now + TAP_WINDOW_MS;
-    _touchPressed = true;
-  } else if (pressed && _touchPressed) {
-    if (!_longPressHandled && now - _touchPressStartMs >= LONG_PRESS_MS) {
-      _longPressHandled = true;
-      _tapCount = 0;
-      _doubleTapPendingUntil = 0;
-      Behavior.GoToEmotion(Normal);
-      LOG_PRINTLN("[TOUCH] Long press -> Normal");
-    }
-  } else if (!pressed && _touchPressed) {
-    _touchPressed = false;
-    _longPressHandled = false;
   }
+}
+
+void Face::HandleSwipe(int32_t dx, int32_t dy) {
+  LOG_PRINTF("[TOUCH] Swipe dx=%d dy=%d\n", dx, dy);
+  if (abs(dx) > abs(dy)) {
+    LOG_PRINTLN("[TOUCH] Horizontal swipe ignored");
+    return;
+  } else if (dy < 0) {
+    Behavior.GoToEmotion(Coquette);
+    LOG_PRINTLN("[TOUCH] Swipe up -> Coquette");
+  } else {
+    GoToSleep();
+    LOG_PRINTLN("[TOUCH] Swipe down -> Sleepy");
+  }
+}
+
+template<typename T>
+static void DrawCapsule(T& dpy, float x1, float y1, float x2, float y2,
+                        int radius, uint16_t color) {
+  int steps = abs(x2 - x1) > abs(y2 - y1)
+    ? abs(x2 - x1) : abs(y2 - y1);
+  if (steps < 1) steps = 1;
+  for (int i = 0; i <= steps; i++) {
+    float t = (float)i / steps;
+    dpy.fillCircle((int)(x1 + (x2 - x1) * t),
+                   (int)(y1 + (y2 - y1) * t), radius, color);
+  }
+}
+
+template<typename T>
+static void DrawZ(T& dpy, int16_t x, int16_t y, uint16_t color, float scale) {
+  float w = 14.0f * scale;
+  float h = 12.0f * scale;
+  float skew = 4.0f * scale;
+  int radius = scale >= 1.4f ? 3 : 2;
+  DrawCapsule(dpy, x + skew, y + radius, x + w + skew, y + radius,
+              radius, color);
+  DrawCapsule(dpy, x + skew, y + radius, x + w, y + h - radius,
+              radius, color);
+  DrawCapsule(dpy, x, y + h - radius, x + w, y + h - radius,
+              radius, color);
 }
 
 void Face::Draw() {
@@ -484,7 +621,19 @@ void Face::Draw() {
   sprite.fillSprite(BG_COLOR);
   EyeDrawer::Draw(sprite, LeftEye.CenterX, SPRITE_HEIGHT / 2, LeftEye.FinalConfig);
   EyeDrawer::Draw(sprite, RightEye.CenterX, SPRITE_HEIGHT / 2, RightEye.FinalConfig);
+
   sprite.pushSprite(0, CenterY - SPRITE_HEIGHT / 2);
+
+  if (_zzzDirty) {
+    tft.fillRect(194, 186, 126, 48, BG_COLOR);
+    if (_sleeping || Behavior.CurrentEmotion == Sleepy ||
+        (gPowerManager && gPowerManager->GetState() == PowerState::SLEEP)) {
+      DrawZ(tft, 202, 190, EYE_COLOR, 1.0f);
+      DrawZ(tft, 236, 196, EYE_COLOR, 1.4f);
+      DrawZ(tft, 270, 204, EYE_COLOR, 1.8f);
+    }
+    _zzzDirty = false;
+  }
 
   uint32_t drawUs = micros() - drawStartUs;
   static uint32_t perfWindowStartMs = 0;

@@ -1,6 +1,6 @@
 # ESP32 Emotive Eyes
 
-> 当前版本：1.0.0
+> 当前版本：1.1.0
 
 <p align="center">
   <img src="./assets/readme/hero.svg" width="100%" alt="ESP32 Emotive Eyes 项目概览：过程式表情眼睛、触摸交互与分级电源管理">
@@ -25,10 +25,10 @@ ESP32 + ST7796 TFT（320×240）上的过程式表情眼睛。所有面部几何
 
 ## 特性
 
-- 18 种表情预设：Normal、Angry、Glee、Happy、Sad、Worried、Focused、Annoyed、Surprised、Skeptic、Frustrated、Unimpressed、Sleepy、Suspicious、Squint、Furious、Scared、Awe
+- 19 种表情预设：Normal、Angry、Glee、Happy、Sad、Worried、Focused、Annoyed、Surprised、Skeptic、Frustrated、Unimpressed、Sleepy、Suspicious、Squint、Furious、Scared、Awe、Coquette
 - 随机眨眼、视线跟随与权重化表情切换，全部基于 `millis()` 时间基准，帧率无关
 - 4 级电源状态机：ACTIVE → RELAX → IDLE → SLEEP，背光平滑渐变
-- XPT2046 触摸：单击反馈、双击复位、三连击触发 Angry、长按复位
+- XPT2046 触摸：单击反馈、双击复位、三连击触发 Angry、长按复位、上滑撒娇、下滑睡觉
 - 芯片温度保护：≥70°C 强制降入 IDLE，≥80°C 强制进入 SLEEP
 - 事件驱动渲染：画面静止时停止 SPI 传输，降低待机功耗
 
@@ -101,6 +101,8 @@ CPU 频率随状态调整：ACTIVE 240MHz、RELAX 160MHz、IDLE 80MHz、SLEEP 80
 | 双击（300ms 内） | 回到 Normal 表情 |
 | 三连击（1.5s 内） | 触发 Angry 表情 |
 | 长按（2s） | 回到 Normal 表情 |
+| 上滑 | 撒娇（Coquette） |
+| 下滑 | 进入睡眠模式（Sleepy + Zzz）并切到低功耗 IDLE，再次触摸唤醒 |
 
 按压力度阈值默认 `TOUCH_PRESSURE_THRESHOLD = 350`，不同面板可能需要微调。
 

@@ -10,7 +10,7 @@
 enum eEmotions {
   Normal, Angry, Glee, Happy, Sad, Worried, Focused, Annoyed,
   Surprised, Skeptic, Frustrated, Unimpressed, Sleepy, Suspicious,
-  Squint, Furious, Scared, Awe, EMOTIONS_COUNT
+  Squint, Furious, Scared, Awe, Coquette, EMOTIONS_COUNT
 };
 
 class Face;
@@ -68,6 +68,7 @@ public:
   void GoTo_Furious();
   void GoTo_Scared();
   void GoTo_Awe();
+  void GoTo_Coquette();
 
 private:
   Face& _face;
@@ -116,10 +117,24 @@ public:
   void Draw();
   bool NeedsRedraw() const;
   void UpdateTouch();
+  void GoToSleep();
+  void WakeFromSleep();
+  bool IsSleeping() const { return _sleeping; }
 
 private:
+  void HandleSwipe(int32_t dx, int32_t dy);
+
   bool _touchPressed;
+  bool _sleeping;
+  bool _sleepRequested;
+  bool _zzzDirty;
+  unsigned long _sleepRequestedAt;
   uint8_t _tapCount;
+  bool _touchStartValid;
+  uint16_t _touchStartX;
+  uint16_t _touchStartY;
+  uint16_t _touchLastX;
+  uint16_t _touchLastY;
   unsigned long _tapWindowUntil;
   unsigned long _touchPressStartMs;
   bool _longPressHandled;

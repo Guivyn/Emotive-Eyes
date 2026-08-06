@@ -26,6 +26,12 @@ public:
   // Called by Face when the user touches the screen.
   void NotifyInteraction();
 
+  // Called by Face when the user gestures "go to sleep".
+  void EnterSleep();
+
+  // Called by Face to drop into low-power IDLE while keeping the face visible.
+  void EnterIdle();
+
   // Main-loop cadence: fast in ACTIVE, slower in RELAX/IDLE, poll-only in SLEEP.
   uint32_t GetFrameIntervalMs() const;
 

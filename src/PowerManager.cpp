@@ -153,6 +153,14 @@ void PowerManager::NotifyInteraction() {
   if (_state != PowerState::ACTIVE) SetState(PowerState::ACTIVE);
 }
 
+void PowerManager::EnterSleep() {
+  SetState(PowerState::SLEEP);
+}
+
+void PowerManager::EnterIdle() {
+  SetState(PowerState::IDLE);
+}
+
 uint32_t PowerManager::GetFrameIntervalMs() const {
   switch (_state) {
     case PowerState::ACTIVE: return 25;  // 40 FPS
