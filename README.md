@@ -3,7 +3,7 @@
 > 当前版本：1.1.1
 
 <p align="center">
-  <img src="./assets/readme/hero.svg?v=1.1.1" width="100%" alt="ESP32 Emotive Eyes 项目概览：过程式表情眼睛、触摸交互与分级电源管理">
+  <img src="./assets/readme/hero.svg?v=2" width="100%" alt="ESP32 Emotive Eyes 项目概览：过程式表情眼睛、触摸交互与分级电源管理">
 </p>
 
 ESP32 + ST7796 TFT（320×240）上的过程式表情眼睛。所有面部几何都由 CPU 实时计算，不依赖任何预渲染图片资源，适合做成桌面 AI 宠物或互动小设备的“脸”。
@@ -90,7 +90,7 @@ Transition → Transformation → Variation1 → Variation2 → Blink → FinalC
 | IDLE | 3 分钟 | 25% | 41ms（约 24fps） | 固定 Normal、视线回中、偶发眨眼 |
 | SLEEP | 5 分钟 | 0% | 不渲染，200ms 触摸轮询 | Sleepy 闭眼静态画面 |
 
-任意触摸都会回到 ACTIVE 并重置空闲计时。背光使用 Gamma 2.2 感知曲线，状态切换时以 20ms/档平滑渐变，避免亮度跳变。
+任意触摸都会回到 ACTIVE 并重置空闲计时。背光使用 Gamma 2.2 感知曲线，状态切换时以缓动曲线平滑渐变（初始快、接近目标慢），避免亮度跳变。
 CPU 频率随状态调整：ACTIVE 240MHz、RELAX 160MHz、IDLE 80MHz、SLEEP 80MHz；进入 SLEEP 时发送 `DISPOFF (0x28)`，唤醒时发送 `DISPON (0x29)` 降低面板功耗。
 
 ## 触摸手势
@@ -102,7 +102,7 @@ CPU 频率随状态调整：ACTIVE 240MHz、RELAX 160MHz、IDLE 80MHz、SLEEP 80
 | 三连击（1.5s 内） | 触发 Angry 表情 |
 | 长按（2s） | 回到 Normal 表情 |
 | 上滑 | 撒娇（Coquette） |
-| 下滑 | 进入睡眠模式（Sleepy + Zzz）并切到低功耗 IDLE，再次触摸唤醒 |
+| 下滑 | 进入睡眠模式（Sleepy + Zzz），约 2 秒后切到低功耗 IDLE，再次触摸唤醒 |
 
 按压力度阈值默认 `TOUCH_PRESSURE_THRESHOLD = 350`，不同面板可能需要微调。
 
