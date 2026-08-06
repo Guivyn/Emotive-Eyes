@@ -3,7 +3,7 @@
 > 当前版本：1.1.1
 
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="ESP32 Emotive Eyes 项目概览：过程式表情眼睛、触摸交互与分级电源管理">
+  <img src="./assets/readme/hero.svg?v=1.1.1" width="100%" alt="ESP32 Emotive Eyes 项目概览：过程式表情眼睛、触摸交互与分级电源管理">
 </p>
 
 ESP32 + ST7796 TFT（320×240）上的过程式表情眼睛。所有面部几何都由 CPU 实时计算，不依赖任何预渲染图片资源，适合做成桌面 AI 宠物或互动小设备的“脸”。
