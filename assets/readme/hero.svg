@@ -36,8 +36,6 @@
     <circle cx="778" cy="246" r="5" fill="#FFB454"/>
     <circle cx="799" cy="246" r="5" fill="#FFB454"/>
     <circle cx="820" cy="246" r="5" fill="#FFB454"/>
-    <text x="842" y="252" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="18" fill="#C9D4DE">3× tap → Angry</text>
-    <text x="1040" y="252" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#7D8894">touch = wake</text>
   </g>
 
   <g id="power-states" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif">
