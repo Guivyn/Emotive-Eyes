@@ -1,3 +1,4 @@
+#include "board_config.h"
 #include "PowerManager.h"
 #include "FacePower.h"
 #include "Config.h"
@@ -11,9 +12,6 @@ extern TFT_eSPI tft;
 #ifndef POWER_LIGHT_SLEEP_ENABLED
   #define POWER_LIGHT_SLEEP_ENABLED 0
 #endif
-#ifndef POWER_LIGHT_SENSOR_ENABLED
-  #define POWER_LIGHT_SENSOR_ENABLED 0
-#endif
 #ifndef POWER_TEMP_PROTECT_ENABLED
   #define POWER_TEMP_PROTECT_ENABLED 1
 #endif
@@ -23,28 +21,52 @@ const float PowerManager::CRITICAL_BATTERY_V = 3.30f;
 const float PowerManager::BATTERY_FULL_V   = 4.20f;
 const float PowerManager::BATTERY_EMPTY_V  = 3.00f;
 
-// Board-specific battery sense: 100k/100k divider on GPIO34 -> Vbat = adc * 2.
-static const uint8_t BATTERY_ADC_PIN = 34;
-static const float   BATTERY_DIVIDER = 2.0f;
-static const uint8_t LIGHT_ADC_PIN   = 35; // actual LDR pin on this board
+// Board-specific battery sense: 100k/100k divider on GPIO39 -> Vbat = adc * 2.
+// Overridable via platformio.ini (POWER_BATTERY_ADC_PIN / POWER_BATTERY_DIVIDER).
+#ifndef POWER_BATTERY_ADC_PIN
+  #define POWER_BATTERY_ADC_PIN 39
+#endif
+#ifndef POWER_BATTERY_DIVIDER
+  #define POWER_BATTERY_DIVIDER 2.0f
+#endif
+static const uint8_t BATTERY_ADC_PIN = POWER_BATTERY_ADC_PIN;
+static const float   BATTERY_DIVIDER = POWER_BATTERY_DIVIDER;
+// Plausible 1S LiPo voltage range. Readings outside this band mean the sense
+// divider is not wired (e.g. USB-only power) and must not trigger protection.
+static const float BATTERY_SENSE_MIN_V = 2.80f;
+static const float BATTERY_SENSE_MAX_V = 4.35f;
+
+static bool BatteryReadingPlausible(float v) {
+  return v >= BATTERY_SENSE_MIN_V && v <= BATTERY_SENSE_MAX_V;
+}
 
 static const uint8_t CPU_MHZ_ACTIVE = 240;
 static const uint8_t CPU_MHZ_RELAX  = 160;
 static const uint8_t CPU_MHZ_IDLE   = 80;
 static const uint8_t CPU_MHZ_SLEEP  = 80;
 
-PowerManager::PowerManager(Face& face, uint8_t backlightPin)
+PowerManager::PowerManager(Face& face, uint8_t backlightPin, float bootBatteryV)
   : _face(face), _backlightPin(backlightPin) {
   _state = PowerState::ACTIVE;
   _lastInteractionMs = 0;
   _lastBatterySampleMs = 0;
-  _batteryV = BATTERY_FULL_V;
+  _lastIcSampleMs = 0;
+  _lastIcCharging = false;
+  _lastIcFull = false;
+  _lastIcPercent = -1;
+  _batteryV = -1.0f;
+  _bootBatteryV = bootBatteryV;
+  _batteryValid = false;
+  _lastLoggedV = -1.0f;
+  _lastRawMv = -1.0f;
+  _lastInvalidLogMs = 0;
+  _trendSampleV = -1.0f;
+  _lastTrendSampleMs = 0;
+  _trendCharging = false;
   _backlightLevel = 0;
   _targetBacklightLevel = 100;
   _stateBacklightTarget = 100;
-  _ambientLevel = 100;
   _lastBacklightStepMs = 0;
-  _lastLightSampleMs = 0;
   _lastTempSampleMs = 0;
   _lastStatsLogMs = 0;
   _chipTempC = 30.0f;
@@ -57,29 +79,49 @@ PowerManager::PowerManager(Face& face, uint8_t backlightPin)
 void PowerManager::Begin() {
   pinMode(_backlightPin, OUTPUT);
   ApplyBacklight(0); // boot dark, then ramp up in loop()
-#if POWER_LIGHT_SENSOR_ENABLED
-  analogSetPinAttenuation(LIGHT_ADC_PIN, ADC_11db);
-  SampleLight();
-#endif
 #if POWER_BATTERY_SENSE_ENABLED
   analogSetPinAttenuation(BATTERY_ADC_PIN, ADC_11db);
   analogRead(BATTERY_ADC_PIN); // settle ADC once
   SampleBattery();
-  LOG_PRINTF("[POWER] Battery %.2fV (%u%%), state=ACTIVE\n",
-    _batteryV, GetBatteryPercent());
+  if (_batteryValid) {
+    LOG_PRINTF("[POWER] Battery %.2fV (%u%%), state=ACTIVE\n",
+      _batteryV, GetBatteryPercent());
+  } else {
+    LOG_PRINTF("[POWER] No usable battery reading: GPIO%u ADC=%.0fmV "
+               "-> %.2fV (wire BAT+ ->100k-> GPIO%u ->100k-> GND)\n",
+               BATTERY_ADC_PIN, _lastRawMv, _batteryV, BATTERY_ADC_PIN);
+#if SERIAL_DEBUG_ENABLED
+    static const uint8_t kScanPins[] = {32, 34, 35, 36, 39};
+    for (uint8_t pin : kScanPins) {
+      analogSetPinAttenuation(pin, ADC_11db);
+      LOG_PRINTF("[POWER]   ADC pin %u: %umV\n", pin,
+                 analogReadMilliVolts(pin));
+    }
+#endif
+  }
 #else
   LOG_PRINTLN("[POWER] Battery sense disabled (no divider on GPIO34 yet)");
+#endif
+
+#if POWER_IC_ENABLED
+  if (_powerIc.Probe()) {
+    LOG_PRINTF("[POWER] power IC: charging=%d full=%d level=%d%%\n",
+               _powerIc.Charging() ? 1 : 0,
+               _powerIc.ChargeFull() ? 1 : 0,
+               _powerIc.BatteryPercent());
+  } else {
+    LOG_PRINTLN("[POWER] power IC not found "
+                "(IP5306@0x75 / MAX17048@0x36)");
+    LOG_PRINTLN("[POWER] charging is automatic while USB is connected; "
+                "watch the bat= voltage climb to confirm");
+  }
+#else
+  LOG_PRINTLN("[POWER] power IC I2C disabled (POWER_IC_ENABLED=0)");
 #endif
 }
 
 void PowerManager::Update() {
   unsigned long now = millis();
-#if POWER_LIGHT_SENSOR_ENABLED
-  if (now - _lastLightSampleMs >= 1000) {
-    _lastLightSampleMs = now;
-    SampleLight();
-  }
-#endif
   UpdateBacklight();
 
 #if POWER_TEMP_PROTECT_ENABLED
@@ -111,8 +153,11 @@ void PowerManager::Update() {
 
   if (now - _lastStatsLogMs >= 30000) {
     _lastStatsLogMs = now;
-    LOG_PRINTF("[STATS] state=%s bl=%u interval=%ums temp=%.1fC\n",
-      StateName(), _backlightLevel, GetFrameIntervalMs(), _chipTempC);
+    LOG_PRINTF("[STATS] state=%s bl=%u interval=%ums temp=%.1fC "
+               "bat=%.2fV %u%% chg=%d full=%d\n",
+      StateName(), _backlightLevel, GetFrameIntervalMs(), _chipTempC,
+      _batteryV, GetBatteryPercent(), IsCharging() ? 1 : 0,
+      IsChargeFull() ? 1 : 0);
   }
 
 #if POWER_BATTERY_SENSE_ENABLED
@@ -120,13 +165,66 @@ void PowerManager::Update() {
   if (now - _lastBatterySampleMs >= 1000) {
     _lastBatterySampleMs = now;
     SampleBattery();
+    if (_batteryValid && fabsf(_batteryV - _lastLoggedV) >= 0.03f) {
+      _lastLoggedV = _batteryV;
+      LOG_PRINTF("[POWER] bat=%.2fV %u%%\n",
+                 _batteryV, GetBatteryPercent());
+      if (_batteryV >= BATTERY_FULL_V - 0.05f) _trendCharging = false;
+    } else if (!_batteryValid &&
+               (now - _lastInvalidLogMs >= 15000 || _lastInvalidLogMs == 0)) {
+      _lastInvalidLogMs = now;
+      LOG_PRINTF("[POWER] no battery source (GPIO%u ADC=%.0fmV -> %.2fV)\n",
+                 BATTERY_ADC_PIN, _lastRawMv, _batteryV);
+    }
+
+    // Infer "charging" from the voltage trend when the I2C power IC is not
+    // reachable: a battery being charged climbs steadily, a resting or
+    // discharging one does not.
+    if (_batteryValid && now - _lastTrendSampleMs >= 30000) {
+      if (_lastTrendSampleMs != 0 && _trendSampleV > 0.0f) {
+        if (_batteryV > _trendSampleV + 0.012f) {
+          _trendCharging = true;
+        } else if (_batteryV <= _trendSampleV) {
+          _trendCharging = false;
+        }
+      }
+      _trendSampleV = _batteryV;
+      _lastTrendSampleMs = now;
+    }
+
   }
 
-  if (_batteryV < CRITICAL_BATTERY_V) {
-    _overheatRecovery = false;
-    SetState(PowerState::SLEEP);
-  } else if (_batteryV < LOW_BATTERY_V && _state == PowerState::ACTIVE) {
-    SetState(PowerState::IDLE);
+  // Only enforce protection on plausible 1S LiPo readings. A floating or
+  // unwired divider (~0V) or a noisy spike must not lock the device into
+  // SLEEP while it is powered from USB.
+  // While charging (USB plugged) never force the device to sleep for a low
+  // battery; it is being topped up.
+  if (BatteryReadingPlausible(_batteryV) && !IsCharging()) {
+    if (_batteryV < CRITICAL_BATTERY_V) {
+      _overheatRecovery = false;
+      SetState(PowerState::SLEEP);
+    } else if (_batteryV < LOW_BATTERY_V && _state == PowerState::ACTIVE) {
+      SetState(PowerState::IDLE);
+    }
+  }
+#endif
+
+#if POWER_IC_ENABLED
+  // Poll the power IC every 5 s and log state changes (charging / full / %).
+  if (_powerIc.Found() && now - _lastIcSampleMs >= 5000) {
+    _lastIcSampleMs = now;
+    _powerIc.Refresh();
+    if (_powerIc.Charging() != _lastIcCharging ||
+        _powerIc.ChargeFull() != _lastIcFull ||
+        _powerIc.BatteryPercent() != _lastIcPercent) {
+      LOG_PRINTF("[POWER-IC] charging=%d full=%d level=%d%%\n",
+                 _powerIc.Charging() ? 1 : 0,
+                 _powerIc.ChargeFull() ? 1 : 0,
+                 _powerIc.BatteryPercent());
+      _lastIcCharging = _powerIc.Charging();
+      _lastIcFull = _powerIc.ChargeFull();
+      _lastIcPercent = _powerIc.BatteryPercent();
+    }
   }
 #endif
 
@@ -172,11 +270,31 @@ uint32_t PowerManager::GetFrameIntervalMs() const {
 }
 
 uint8_t PowerManager::GetBatteryPercent() const {
+#if POWER_IC_ENABLED
+  if (_powerIc.Found() && _powerIc.PercentValid()) {
+    return (uint8_t)_powerIc.BatteryPercent();
+  }
+#endif
+  if (!_batteryValid) return 0;
   float p = (_batteryV - BATTERY_EMPTY_V) /
             (BATTERY_FULL_V - BATTERY_EMPTY_V);
   if (p < 0.0f) p = 0.0f;
   if (p > 1.0f) p = 1.0f;
   return (uint8_t)(p * 100.0f);
+}
+
+bool PowerManager::IsCharging() const {
+#if POWER_IC_ENABLED
+  if (_powerIc.Found()) return _powerIc.Charging();
+#endif
+  return _trendCharging;
+}
+
+bool PowerManager::IsChargeFull() const {
+#if POWER_IC_ENABLED
+  if (_powerIc.Found()) return _powerIc.ChargeFull();
+#endif
+  return false;
 }
 
 static void ApplyCpuFrequency(PowerState state) {
@@ -231,10 +349,6 @@ void PowerManager::SetBacklight(uint8_t percent) {
 
 void PowerManager::UpdateBacklight() {
   uint8_t target = _stateBacklightTarget;
-#if POWER_LIGHT_SENSOR_ENABLED
-  target = (uint8_t)(_stateBacklightTarget * GetLightFactor());
-  if (_stateBacklightTarget > 0 && target < 5) target = 5; // min visible
-#endif
   _targetBacklightLevel = target;
   if (_backlightLevel == _targetBacklightLevel) return;
   unsigned long now = millis();
@@ -254,24 +368,6 @@ void PowerManager::ApplyBacklight(uint8_t level) {
   analogWrite(_backlightPin, _gammaLut[level]);
 }
 
-void PowerManager::SampleLight() {
-  uint32_t sum = 0;
-  const int samples = 8;
-  for (int i = 0; i < samples; i++) {
-    sum += analogReadMilliVolts(LIGHT_ADC_PIN);
-    delayMicroseconds(200);
-  }
-  float mv = (float)sum / samples;
-  float ambient = (mv - 120.0f) * 100.0f / 380.0f; // 120..500mV -> 0..100
-  if (ambient < 0.0f) ambient = 0.0f;
-  if (ambient > 100.0f) ambient = 100.0f;
-  if (fabsf(ambient - _ambientLevel) >= 2.0f) _ambientLevel = (uint8_t)ambient;
-}
-
-float PowerManager::GetLightFactor() const {
-  return 0.10f + 0.90f * (_ambientLevel / 100.0f);
-}
-
 void PowerManager::SampleTemperature() {
   _chipTempC = temperatureRead();
 }
@@ -287,14 +383,32 @@ const char* PowerManager::StateName() const {
 }
 
 void PowerManager::SampleBattery() {
+  float bestV = -1.0f;
+  float rawMv = -1.0f;
+#if POWER_BATTERY_SENSE_ENABLED
   uint32_t sum = 0;
   const int samples = 8;
   for (int i = 0; i < samples; i++) {
     sum += analogReadMilliVolts(BATTERY_ADC_PIN);
     delayMicroseconds(200);
   }
-  float mv = (float)sum / samples;
-  _batteryV = mv * BATTERY_DIVIDER / 1000.0f;
+  rawMv = (float)sum / samples;
+  float adcV = rawMv * BATTERY_DIVIDER / 1000.0f;
+  if (BatteryReadingPlausible(adcV)) bestV = adcV;
+#endif
+  // Fall back to the one-shot XPT2046 VBAT sample taken before tft.begin().
+  if (bestV < 0.0f && BatteryReadingPlausible(_bootBatteryV)) {
+    bestV = _bootBatteryV;
+  }
+  if (bestV >= 0.0f) {
+    _batteryV = bestV;
+    _batteryValid = true;
+  } else {
+    _batteryV = -1.0f;
+    _batteryValid = false;
+  }
+
+  _lastRawMv = rawMv;
 }
 
 void PowerManager::EnterLightSleep() {

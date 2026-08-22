@@ -31,6 +31,8 @@ ESP32 + ST7796 TFT（320×240）上的过程式表情眼睛。所有面部几何
 - XPT2046 触摸：单击反馈、双击复位、三连击触发 Angry、长按复位、上滑撒娇、下滑睡觉
 - 芯片温度保护：≥70°C 强制降入 IDLE，≥80°C 强制进入 SLEEP
 - 事件驱动渲染：画面静止时停止 SPI 传输，降低待机功耗
+- 电源键：BOOT 长按 2 秒关机（深睡），按 BOOT 或 EN 开机
+- 触摸校准可运行时调整：串口 `cal` 查看，`cal <offset> <range>` 设置并持久化
 
 ## 快速开始
 
@@ -53,6 +55,10 @@ pio test -e native
 | 屏幕 | ST7796 SPI TFT，320×240 |
 | 触摸 | XPT2046，与 TFT 共用 SPI 总线 |
 | 背光 | GPIO27（低电平关，高电平开） |
+| RGB LED | R=GPIO17 / G=GPIO4 / B=GPIO16（低电平点亮，固件默认熄灭） |
+| 光敏 | GPIO34（硬件存在，自动调光已移除） |
+| 电池 | 无板载电量 IC（IP5306 / MAX17048 均未焊）；GPIO39 预留 2:1 分压采样 |
+| 3D 外壳 | [assets/case/cydcase.stl](assets/case/cydcase.stl) + [CYDcaseDisplay.stl](assets/case/CYDcaseDisplay.stl) |
 
 | 信号 | GPIO |
 |------|------|
@@ -61,9 +67,11 @@ pio test -e native
 | TFT_MISO / TOUCH_MISO | GPIO12 |
 | TFT_CS | GPIO15 |
 | TFT_DC | GPIO2 |
-| TFT_RST | GPIO4 |
+| TFT_RST | 不接（-1，屏幕复位接板级 RESET） |
 | TFT_BL | GPIO27 |
 | TOUCH_CS | GPIO33 |
+| BOOT（电源键） | GPIO0，长按 2 秒进入深睡 |
+| I2C | SDA=GPIO21 / SCL=GPIO22 |
 
 SPI 频率为 60MHz，RGB 顺序为 `TFT_BGR`。
 
@@ -112,11 +120,13 @@ CPU 频率随状态调整：ACTIVE 240MHz、RELAX 160MHz、IDLE 80MHz、SLEEP 80
 
 | 开关 | 默认 | 说明 |
 |------|------|------|
-| `POWER_BATTERY_SENSE_ENABLED` | 0 | GPIO34 接好 2:1 分压后改为 1，启用电池电压采样 |
+| `POWER_BATTERY_SENSE_ENABLED` | 1 | GPIO39 接好 2:1 分压后启用电池电压采样 |
 | `POWER_LIGHT_SLEEP_ENABLED` | 0 | GPIO36 补 10kΩ 上拉后改为 1，启用 LightSleep |
-| `POWER_LIGHT_SENSOR_ENABLED` | 0 | GPIO35 光敏自动调光（实测动态范围偏窄，默认停用） |
 | `POWER_TEMP_PROTECT_ENABLED` | 1 | 芯片温度保护 |
 | `SERIAL_DEBUG_ENABLED` | 1 | 串口调试日志；发布固件可改为 0 关闭 |
+
+> 电池采样引脚实际在 GPIO39（`board_config.h` 中 `PIN_BATTERY_ADC`），2:1 分压：
+> BAT+ → 100kΩ → GPIO39 → 100kΩ → GND。
 
 ## 项目结构
 
@@ -129,6 +139,9 @@ ESP32-demo/
 ├── README.md
 ├── assets/readme/
 │   └── hero-1.1.1.svg
+├── assets/case/
+│   ├── cydcase.stl
+│   └── CYDcaseDisplay.stl
 ├── docs/
 │   ├── 技术文档.md
 │   ├── ESP32-WROOM-32_引脚参考手册.md
@@ -139,6 +152,7 @@ ESP32-demo/
 └── src/
     ├── main.cpp
     ├── Config.h
+    ├── board_config.h
     ├── Log.h
     ├── Animation.h
     ├── Eye.h
@@ -147,6 +161,8 @@ ESP32-demo/
     ├── Face.cpp
     ├── FacePower.h
     ├── FacePower.cpp
+    ├── PowerIC.h
+    ├── PowerIC.cpp
     ├── PowerManager.h
     └── PowerManager.cpp
 ```
@@ -154,8 +170,9 @@ ESP32-demo/
 ## 已知限制
 
 - LightSleep 唤醒依赖 GPIO36 触摸 IRQ，目前需补上拉电阻并显式开启构建开关
-- 电池电压采样需要 GPIO34 接两个 100kΩ 分压电阻
-- GPIO35 光敏电阻动态范围偏窄，自动调光默认关闭
+- 电池电压采样需要 GPIO39 接两个 100kΩ 分压电阻
+- 光敏硬件在 GPIO34，自动调光已移除（动态范围偏窄，易误调暗）
+- 板载无 IP5306 / MAX17048 电量 IC，I2C 探测已支持两种芯片（0x75 / 0x36），本板未焊
 - 触摸阈值和 SPI 频率可能因具体面板需要调整
 
 ## 许可

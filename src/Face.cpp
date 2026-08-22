@@ -1,5 +1,6 @@
 #include "Face.h"
 #include "Log.h"
+#include <LittleFS.h>
 
 extern TFT_eSPI tft;
 
@@ -29,18 +30,6 @@ static const EyeConfig Preset_Furious = {-2, 0, 38, 50, 0.4f, 0, 2, 10};
 static const EyeConfig Preset_Scared = {-4, 0, 50, 50, -0.1f, 0, 15, 10};
 static const EyeConfig Preset_Awe = {2, 0, 44, 56, -0.1f, 0.1f, 15, 15};
 static const EyeConfig Preset_Coquette = {0, -6, 20, 44, 0.25f, -0.25f, 10, 8};
-
-static int16_t RawTouchToScreenX(uint16_t rawX, uint16_t rawY) {
-  int32_t x = (int32_t)rawY - 300;
-  x = x * SCREEN_WIDTH / 3600;
-  return (int16_t)(SCREEN_WIDTH - x);
-}
-
-static int16_t RawTouchToScreenY(uint16_t rawX, uint16_t rawY) {
-  int32_t y = (int32_t)rawX - 300;
-  y = y * SCREEN_HEIGHT / 3600;
-  return (int16_t)y;
-}
 
 LookAssistant::LookAssistant(Face& face)
   : _face(face), Timer(2500), _minInterval(1500), _maxInterval(3500) {
@@ -360,6 +349,9 @@ Face::Face(uint16_t sw, uint16_t sh, uint16_t es)
   _touchPressStartMs = 0;
   _longPressHandled = false;
   _doubleTapPendingUntil = 0;
+  _lastTouchPollMs = 0;
+  _calOffset = TOUCH_CAL_OFFSET;
+  _calRange = TOUCH_CAL_RANGE;
   _yawnState = 0;
   _yawnEndMs = 0;
   _nextYawnMs = 0;
@@ -376,6 +368,64 @@ Face::Face(uint16_t sw, uint16_t sh, uint16_t es)
   } else {
     LOG_PRINTLN("[WARN] Sprite alloc failed; rendering disabled");
   }
+
+  LoadCalibration();
+}
+
+void Face::SetCalibration(int32_t offset, int32_t range) {
+  if (range <= 0) return;
+  _calOffset = offset;
+  _calRange = range;
+  SaveCalibration();
+  LOG_PRINTF("[CAL] offset=%d range=%d saved\n", _calOffset, _calRange);
+}
+
+void Face::LoadCalibration() {
+  if (!LittleFS.begin(true)) return;
+  // exists()/open("r") log a vfs error for missing files; scan the root
+  // directory with the v3 File API instead.
+  bool found = false;
+  File root = LittleFS.open("/");
+  File entry;
+  while ((entry = root.openNextFile())) {
+    String name = entry.name();
+    if (name == "touch.cal" || name.endsWith("/touch.cal")) found = true;
+    entry.close();
+    if (found) break;
+  }
+  root.close();
+  if (!found) return;
+  File f = LittleFS.open("/touch.cal", "r");
+  if (!f) return;
+  int32_t off = 0, rng = 0;
+  size_t n = f.readBytes((char*)&off, sizeof(off));
+  n += f.readBytes((char*)&rng, sizeof(rng));
+  f.close();
+  if (n == sizeof(off) + sizeof(rng) && rng > 0) {
+    _calOffset = off;
+    _calRange = rng;
+  }
+}
+
+void Face::SaveCalibration() const {
+  if (!LittleFS.begin(true)) return;
+  File f = LittleFS.open("/touch.cal", "w");
+  if (!f) return;
+  f.write((const uint8_t*)&_calOffset, sizeof(_calOffset));
+  f.write((const uint8_t*)&_calRange, sizeof(_calRange));
+  f.close();
+}
+
+int16_t Face::RawToScreenX(uint16_t rawX, uint16_t rawY) const {
+  int32_t x = (int32_t)rawY - _calOffset;
+  x = x * SCREEN_WIDTH / _calRange;
+  return (int16_t)(SCREEN_WIDTH - x);
+}
+
+int16_t Face::RawToScreenY(uint16_t rawX, uint16_t rawY) const {
+  int32_t y = (int32_t)rawX - _calOffset;
+  y = y * SCREEN_HEIGHT / _calRange;
+  return (int16_t)y;
 }
 
 void Face::LookFront() {
@@ -504,6 +554,10 @@ void Face::UpdateTouch() {
     }
   }
 
+  // Throttle SPI touch reads to ~30ms; gesture timeouts above stay exact.
+  if (now - _lastTouchPollMs < TOUCH_POLL_INTERVAL_MS) return;
+  _lastTouchPollMs = now;
+
   uint16_t z = tft.getTouchRawZ();
   bool pressed = z >= TOUCH_PRESSURE_THRESHOLD;
   if (pressed && !_touchPressed) {
@@ -511,8 +565,8 @@ void Face::UpdateTouch() {
     uint16_t rx = 0, ry = 0;
     tft.getTouchRaw(&rx, &ry);
     LOG_PRINTF("[TOUCH] press z=%u raw=%u,%u\n", z, rx, ry);
-    _touchStartX = _touchLastX = RawTouchToScreenX(rx, ry);
-    _touchStartY = _touchLastY = RawTouchToScreenY(rx, ry);
+    _touchStartX = _touchLastX = RawToScreenX(rx, ry);
+    _touchStartY = _touchLastY = RawToScreenY(rx, ry);
     _touchStartValid = true;
     if (gPowerManager) gPowerManager->NotifyInteraction();
     Blink.Blink();
@@ -522,8 +576,8 @@ void Face::UpdateTouch() {
   } else if (pressed && _touchPressed) {
     uint16_t rx = 0, ry = 0;
     tft.getTouchRaw(&rx, &ry);
-    _touchLastX = RawTouchToScreenX(rx, ry);
-    _touchLastY = RawTouchToScreenY(rx, ry);
+    _touchLastX = RawToScreenX(rx, ry);
+    _touchLastY = RawToScreenY(rx, ry);
     _touchStartValid = true;
     if (!_longPressHandled && now - _touchPressStartMs >= LONG_PRESS_MS) {
       _longPressHandled = true;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "PowerIC.h"
 
 // Power management for the Emotive Eyes robot.
 // Backlight PWM + Active/Idle/LightSleep state machine + battery monitor.
@@ -18,7 +19,7 @@ extern PowerManager* gPowerManager;
 
 class PowerManager {
 public:
-  PowerManager(Face& face, uint8_t backlightPin);
+  PowerManager(Face& face, uint8_t backlightPin, float bootBatteryV = -1.0f);
 
   void Begin();
   void Update();
@@ -36,6 +37,19 @@ public:
   uint32_t GetFrameIntervalMs() const;
 
   uint8_t GetBatteryPercent() const;
+  float GetBatteryVoltage() const { return _batteryV; }
+  bool HasBatteryReading() const { return _batteryValid; }
+  bool IsCharging() const;
+  bool IsChargeFull() const;
+  // True when the charging state came from the I2C power IC rather than the
+  // voltage-trend heuristic (useful for serial diagnostics).
+  bool ChargingSourceIsI2C() const {
+#if POWER_IC_ENABLED
+    return _powerIc.Found();
+#else
+    return false;
+#endif
+  }
   PowerState GetState() const { return _state; }
 
   static const unsigned long ACTIVE_TIMEOUT_MS = 60 * 1000UL;
@@ -53,13 +67,24 @@ private:
   PowerState _state;
   unsigned long _lastInteractionMs;
   unsigned long _lastBatterySampleMs;
+  unsigned long _lastIcSampleMs;
+  bool _lastIcCharging;
+  bool _lastIcFull;
+  int8_t _lastIcPercent;
   float _batteryV;
+  float _bootBatteryV;
+  float _lastLoggedV;
+  float _lastRawMv;
+  unsigned long _lastInvalidLogMs;
+  float _trendSampleV;
+  unsigned long _lastTrendSampleMs;
+  bool _trendCharging;
+  bool _batteryValid;
+  PowerIC _powerIc;
   uint8_t _backlightLevel;      // current perceived brightness (0-100)
   uint8_t _targetBacklightLevel;
   uint8_t _stateBacklightTarget; // brightness set by the current power state
-  uint8_t _ambientLevel;         // 0-100, from the GPIO34 light sensor
   unsigned long _lastBacklightStepMs;
-  unsigned long _lastLightSampleMs;
   unsigned long _lastTempSampleMs;
   unsigned long _lastStatsLogMs;
   float _chipTempC;
@@ -70,8 +95,6 @@ private:
   void SetBacklight(uint8_t percent); // set target, smoothed by Update()
   void UpdateBacklight();
   void ApplyBacklight(uint8_t level);
-  void SampleLight();
-  float GetLightFactor() const;
   void SampleTemperature();
   const char* StateName() const;
   void SampleBattery();

@@ -120,9 +120,16 @@ public:
   void GoToSleep();
   void WakeFromSleep();
   bool IsSleeping() const { return _sleeping; }
+  void SetCalibration(int32_t offset, int32_t range);
+  int32_t GetCalOffset() const { return _calOffset; }
+  int32_t GetCalRange() const { return _calRange; }
 
 private:
   void HandleSwipe(int32_t dx, int32_t dy);
+  void LoadCalibration();
+  void SaveCalibration() const;
+  int16_t RawToScreenX(uint16_t rawX, uint16_t rawY) const;
+  int16_t RawToScreenY(uint16_t rawX, uint16_t rawY) const;
 
   bool _touchPressed;
   bool _sleeping;
@@ -139,6 +146,9 @@ private:
   unsigned long _touchPressStartMs;
   bool _longPressHandled;
   unsigned long _doubleTapPendingUntil;
+  unsigned long _lastTouchPollMs;
+  int32_t _calOffset;
+  int32_t _calRange;
   uint8_t _yawnState;
   unsigned long _yawnEndMs;
   unsigned long _nextYawnMs;

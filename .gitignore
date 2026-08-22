@@ -2,6 +2,8 @@
 .pio/
 .pioenvs/
 .piolibdeps/
+.firmware/
+.claude/
 .clang_complete
 .gcc-flags.json
 
