@@ -1,9 +1,9 @@
 # ESP32 Emotive Eyes
 
-> 当前版本：1.1.1
+> 当前版本：1.2.0
 
 <p align="center">
-  <img src="./assets/readme/hero-1.1.1.svg" width="100%" alt="ESP32 Emotive Eyes 项目概览：过程式表情眼睛、触摸交互与分级电源管理">
+  <img src="./assets/readme/hero-1.2.0.svg" width="100%" alt="ESP32 Emotive Eyes 项目概览：过程式表情眼睛、触摸交互与分级电源管理">
 </p>
 
 ESP32 + ST7796 TFT（320×240）上的过程式表情眼睛。所有面部几何都由 CPU 实时计算，不依赖任何预渲染图片资源，适合做成桌面 AI 宠物或互动小设备的“脸”。
@@ -45,7 +45,7 @@ pio device monitor -b 115200
 pio test -e native
 ```
 
-`TFT_eSPI` 已通过 `lib_deps` 自动下载，屏幕引脚和构建开关都在 `platformio.ini` 中，无需修改 `User_Setup.h`。
+`TFT_eSPI` 已通过 `lib_deps` 自动下载；屏幕引脚集中在 `src/board_config.h`，构建开关在 `platformio.ini` 中，无需修改 `User_Setup.h`。
 
 ## 硬件接线
 
@@ -55,10 +55,9 @@ pio test -e native
 | 屏幕 | ST7796 SPI TFT，320×240 |
 | 触摸 | XPT2046，与 TFT 共用 SPI 总线 |
 | 背光 | GPIO27（低电平关，高电平开） |
-| RGB LED | R=GPIO17 / G=GPIO4 / B=GPIO16（低电平点亮，固件默认熄灭） |
-| 光敏 | GPIO34（硬件存在，自动调光已移除） |
-| 电池 | 无板载电量 IC（IP5306 / MAX17048 均未焊）；GPIO39 预留 2:1 分压采样 |
-| 3D 外壳 | [assets/case/cydcase.stl](assets/case/cydcase.stl) + [CYDcaseDisplay.stl](assets/case/CYDcaseDisplay.stl) |
+| RGB LED | R=GPIO17 / G=GPIO4 / B=GPIO16（低电平点亮） |
+| 光敏 | GPIO34 |
+| 电池 | 无板载电量 IC（IP5306 / MAX17048）；GPIO39 预留 2:1 分压采样 |
 
 | 信号 | GPIO |
 |------|------|
@@ -74,6 +73,15 @@ pio test -e native
 | I2C | SDA=GPIO21 / SCL=GPIO22 |
 
 SPI 频率为 60MHz，RGB 顺序为 `TFT_BGR`。
+
+## 3D 打印外壳
+
+配套 CYD 2.4" 的外壳模型（STL）放在 [`hardware/case/`](hardware/case/)：
+
+- [cydcase.stl](hardware/case/cydcase.stl) —— 外壳主体
+- [CYDcaseDisplay.stl](hardware/case/CYDcaseDisplay.stl) —— 屏幕面板 / 前框
+
+建议 PLA、0.2mm 层高打印，打印前按打印机尺寸检查缩放。
 
 ## 渲染管线
 
@@ -138,8 +146,8 @@ ESP32-demo/
 ├── LICENSE
 ├── README.md
 ├── assets/readme/
-│   └── hero-1.1.1.svg
-├── assets/case/
+│   └── hero-1.2.0.svg
+├── hardware/case/
 │   ├── cydcase.stl
 │   └── CYDcaseDisplay.stl
 ├── docs/
@@ -169,10 +177,10 @@ ESP32-demo/
 
 ## 已知限制
 
-- LightSleep 唤醒依赖 GPIO36 触摸 IRQ，目前需补上拉电阻并显式开启构建开关
-- 电池电压采样需要 GPIO39 接两个 100kΩ 分压电阻
-- 光敏硬件在 GPIO34，自动调光已移除（动态范围偏窄，易误调暗）
-- 板载无 IP5306 / MAX17048 电量 IC，I2C 探测已支持两种芯片（0x75 / 0x36），本板未焊
+- LightSleep 需在 GPIO36 补 10kΩ 上拉并开启构建开关
+- 电池电压采样需在 GPIO39 外接 2:1 分压电阻
+- 板载无电量 IC（IP5306 / MAX17048）
+- 光敏（GPIO34）未启用
 - 触摸阈值和 SPI 频率可能因具体面板需要调整
 
 ## 许可
