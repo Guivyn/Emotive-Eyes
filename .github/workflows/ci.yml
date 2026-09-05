@@ -17,7 +17,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install PlatformIO Core
-        run: pip install platformio
+        run: pip install platformio==6.1.19
 
       - name: Build firmware
         run: pio run -e esp32dev

@@ -22,12 +22,12 @@
     <text x="64" y="196" font-size="25" fill="#C9D4DE">纯 CPU 计算的过程式表情眼睛，无需图片资源。</text>
     <text x="64" y="232" font-size="25" fill="#C9D4DE">19 种表情预设，触摸手势与分级电源管理。</text>
     <text x="64" y="284" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" fill="#7D8894">PlatformIO · C++ · ST7796 320×240 · 4MB Flash</text>
-    <text x="1136" y="78" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#7D8894">v1.2.0</text>
+    <text x="1136" y="78" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#7D8894">v1.2.1</text>
   </g>
 
   <g id="project-proof">
     <rect x="748" y="48" width="388" height="228" rx="18" fill="#0E141B" stroke="#26343F"/>
-    <text x="770" y="78" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" fill="#7D8894">PROCEDURAL RENDER · v1.2.0</text>
+    <text x="770" y="78" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" fill="#7D8894">PROCEDURAL RENDER · v1.2.1</text>
 
     <path d="M 824 145 Q 874 108 924 145 Q 874 182 824 145 Z" fill="#F6F1E7"/>
     <path d="M 960 145 Q 1010 108 1060 145 Q 1010 182 960 145 Z" fill="#F6F1E7"/>

@@ -1,6 +1,10 @@
 #include "Face.h"
+#include "CalibrationCodec.h"
 #include "Log.h"
 #include <LittleFS.h>
+#if defined(ESP32)
+  #include "esp_heap_caps.h"
+#endif
 
 extern TFT_eSPI tft;
 
@@ -30,6 +34,25 @@ static const EyeConfig Preset_Furious = {-2, 0, 38, 50, 0.4f, 0, 2, 10};
 static const EyeConfig Preset_Scared = {-4, 0, 50, 50, -0.1f, 0, 15, 10};
 static const EyeConfig Preset_Awe = {2, 0, 44, 56, -0.1f, 0.1f, 15, 15};
 static const EyeConfig Preset_Coquette = {0, -6, 20, 44, 0.25f, -0.25f, 10, 8};
+
+namespace {
+
+bool LittleFsHasCalibrationFile(const char* suffix) {
+  File root = LittleFS.open("/");
+  if (!root) return false;
+  bool found = false;
+  File entry;
+  while ((entry = root.openNextFile())) {
+    String name = entry.name();
+    if (name == suffix || name.endsWith(suffix)) found = true;
+    entry.close();
+    if (found) break;
+  }
+  root.close();
+  return found;
+}
+
+} // namespace
 
 LookAssistant::LookAssistant(Face& face)
   : _face(face), Timer(2500), _minInterval(1500), _maxInterval(3500) {
@@ -237,7 +260,7 @@ void FaceExpression::GoTo_Coquette() {
 }
 
 FaceBehavior::FaceBehavior(Face& face)
-  : Timer(4000), _face(face) {
+  : Emotions{}, CurrentEmotion(Normal), Timer(4000), _face(face) {
   Timer.Start();
   Clear();
   Emotions[Normal] = 4;
@@ -329,91 +352,202 @@ void FaceBehavior::GoToEmotion(eEmotions e) {
 }
 
 Face::Face(uint16_t sw, uint16_t sh, uint16_t es)
-  : LeftEye(), RightEye(), Blink(*this), Look(*this),
-    Behavior(*this), Expression(*this), sprite(&tft) {
-  EyeSize = es;
-  CenterX = sw / 2;
-  CenterY = sh / 2;
+  : EyeSize(es),
+    CenterX(sw / 2),
+    CenterY(sh / 2),
+    EyeInterDistance(12),
+    LeftEye(),
+    RightEye(),
+    Blink(*this),
+    Look(*this),
+    Behavior(*this),
+    Expression(*this),
+    RandomBehavior(false),
+    RandomLook(false),
+    RandomBlink(false),
+    _touchPressed(false),
+    _sleeping(false),
+    _sleepRequested(false),
+    _zzzDirty(false),
+    _sleepRequestedAt(0),
+    _tapCount(0),
+    _touchStartValid(false),
+    _touchStartX(0),
+    _touchStartY(0),
+    _touchLastX(0),
+    _touchLastY(0),
+    _tapWindowUntil(0),
+    _touchPressStartMs(0),
+    _longPressHandled(false),
+    _doubleTapPendingUntil(0),
+    _lastTouchPollMs(0),
+    _calOffset(TOUCH_CAL_OFFSET),
+    _calRange(TOUCH_CAL_RANGE),
+    _yawnState(0),
+    _yawnEndMs(0),
+    _nextYawnMs(0),
+    sprite(&tft),
+    spriteOk(false),
+    _renderMode(RenderMode::NONE),
+    _startupPhase(StartupPhase::BOOT),
+    _bootTime(0) {
   LeftEye.IsMirrored = true;
   RightEye.IsMirrored = false;
-  EyeInterDistance = 12;
-  Behavior.CurrentEmotion = Normal;
-  _touchPressed = false;
-  _tapCount = 0;
-  _touchStartValid = false;
-  _touchStartX = 0;
-  _touchStartY = 0;
-  _touchLastX = 0;
-  _touchLastY = 0;
-  _tapWindowUntil = 0;
-  _touchPressStartMs = 0;
-  _longPressHandled = false;
-  _doubleTapPendingUntil = 0;
-  _lastTouchPollMs = 0;
-  _calOffset = TOUCH_CAL_OFFSET;
-  _calRange = TOUCH_CAL_RANGE;
-  _yawnState = 0;
-  _yawnEndMs = 0;
-  _nextYawnMs = 0;
-  _sleeping = false;
-  _sleepRequested = false;
-  _zzzDirty = false;
-  _sleepRequestedAt = 0;
-  spriteOk = false;
 
-  if (sprite.createSprite(SCREEN_WIDTH, SPRITE_HEIGHT)) {
+  const size_t fullSpriteBytes =
+      (1UL * FRAME_SPRITE_WIDTH * FRAME_SPRITE_HEIGHT + 1UL) *
+      sizeof(uint16_t);
+  bool fullFramePossible = true;
+#if defined(ESP32)
+  const size_t largestFreeBlock =
+      heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  fullFramePossible = largestFreeBlock >= fullSpriteBytes;
+  if (!fullFramePossible) {
+    LOG_PRINTF("[INFO] Full-frame sprite skipped (%uKB needed, "
+               "largest block=%uKB)\n",
+               (unsigned)(fullSpriteBytes / 1024U),
+               (unsigned)(largestFreeBlock / 1024U));
+  }
+#endif
+
+  if (fullFramePossible &&
+      sprite.createSprite(FRAME_SPRITE_WIDTH, FRAME_SPRITE_HEIGHT)) {
     sprite.fillSprite(BG_COLOR);
     spriteOk = true;
-    LOG_PRINTLN("[OK] Single sprite (320x120, 77KB)");
+    _renderMode = RenderMode::FULL_FRAME;
+    LOG_PRINTF("[OK] Full-frame sprite (%ux%u, %uKB)\n",
+               FRAME_SPRITE_WIDTH, FRAME_SPRITE_HEIGHT,
+               (unsigned)((1UL * FRAME_SPRITE_WIDTH * FRAME_SPRITE_HEIGHT *
+                           sizeof(uint16_t)) / 1024UL));
+  } else if (sprite.createSprite(FRAME_TILE_WIDTH, FRAME_SPRITE_HEIGHT)) {
+    sprite.fillSprite(BG_COLOR);
+    spriteOk = true;
+    _renderMode = RenderMode::HALF_TILED;
+    LOG_PRINTF("[WARN] Full-frame sprite unavailable; using 2 tiled passes "
+               "with one buffer (%ux%u, %uKB)\n",
+               FRAME_TILE_WIDTH, FRAME_SPRITE_HEIGHT,
+               (unsigned)((1UL * FRAME_TILE_WIDTH * FRAME_SPRITE_HEIGHT *
+                           sizeof(uint16_t)) / 1024UL));
   } else {
-    LOG_PRINTLN("[WARN] Sprite alloc failed; rendering disabled");
+    // This is deliberately slow, but guarantees a visible frame even if a
+    // future board has less contiguous RAM than the tiled fallback requires.
+    spriteOk = true;
+    _renderMode = RenderMode::DIRECT_TFT;
+    LOG_PRINTLN("[WARN] Sprite alloc failed; using direct TFT fallback");
   }
+}
 
+void Face::LoadDeferredState() {
+  // LittleFS is not needed to draw the first frame, so mount it after the
+  // face is already visible during boot.
   LoadCalibration();
 }
 
-void Face::SetCalibration(int32_t offset, int32_t range) {
-  if (range <= 0) return;
+bool Face::InitializeFilesystem() {
+  if (LittleFS.begin(false)) return true;
+  LOG_PRINTLN("[CAL] filesystem mount failed; formatting by explicit request");
+  if (!LittleFS.format()) return false;
+  return LittleFS.begin(false);
+}
+
+bool Face::SetCalibration(int32_t offset, int32_t range) {
+  if (range <= 0) return false;
   _calOffset = offset;
   _calRange = range;
-  SaveCalibration();
-  LOG_PRINTF("[CAL] offset=%d range=%d saved\n", _calOffset, _calRange);
+  bool saved = SaveCalibration();
+  if (saved) {
+    LOG_PRINTF("[CAL] offset=%d range=%d saved\n", _calOffset, _calRange);
+  } else {
+    LOG_PRINTF("[CAL] offset=%d range=%d applied, NOT saved\n",
+               _calOffset, _calRange);
+  }
+  return saved;
 }
 
 void Face::LoadCalibration() {
-  if (!LittleFS.begin(true)) return;
+  // Never format flash implicitly while loading calibration. A missing or
+  // damaged filesystem should not erase user data during boot.
+  if (!LittleFS.begin(false)) {
+    LOG_PRINTLN("[CAL] filesystem unavailable; using built-in calibration");
+    return;
+  }
   // exists()/open("r") log a vfs error for missing files; scan the root
   // directory with the v3 File API instead.
-  bool found = false;
-  File root = LittleFS.open("/");
-  File entry;
-  while ((entry = root.openNextFile())) {
-    String name = entry.name();
-    if (name == "touch.cal" || name.endsWith("/touch.cal")) found = true;
-    entry.close();
-    if (found) break;
-  }
-  root.close();
-  if (!found) return;
+  if (!LittleFsHasCalibrationFile("touch.cal")) return;
   File f = LittleFS.open("/touch.cal", "r");
-  if (!f) return;
-  int32_t off = 0, rng = 0;
-  size_t n = f.readBytes((char*)&off, sizeof(off));
-  n += f.readBytes((char*)&rng, sizeof(rng));
+  if (!f) {
+    LOG_PRINTLN("[CAL] calibration file could not be opened");
+    return;
+  }
+
+  // Accept the old 8-byte format so existing devices migrate on the next
+  // successful save, while new writes are versioned and checksummed.
+  if (f.size() == sizeof(int32_t) * 2) {
+    int32_t off = 0, rng = 0;
+    size_t n = f.readBytes((char*)&off, sizeof(off));
+    n += f.readBytes((char*)&rng, sizeof(rng));
+    f.close();
+    if (n == sizeof(off) + sizeof(rng) && rng > 0) {
+      _calOffset = off;
+      _calRange = rng;
+      LOG_PRINTLN("[CAL] loaded legacy calibration");
+    } else {
+      LOG_PRINTLN("[CAL] invalid legacy calibration; using defaults");
+    }
+    return;
+  }
+
+  CalibrationCodec::Record record{};
+  size_t n = f.read(reinterpret_cast<uint8_t*>(&record), sizeof(record));
   f.close();
-  if (n == sizeof(off) + sizeof(rng) && rng > 0) {
-    _calOffset = off;
-    _calRange = rng;
+  if (n == sizeof(record) && CalibrationCodec::IsValid(record)) {
+    _calOffset = record.offset;
+    _calRange = record.range;
+    LOG_PRINTLN("[CAL] loaded persisted calibration");
+  } else {
+    LOG_PRINTLN("[CAL] invalid calibration record; using defaults");
   }
 }
 
-void Face::SaveCalibration() const {
-  if (!LittleFS.begin(true)) return;
-  File f = LittleFS.open("/touch.cal", "w");
-  if (!f) return;
-  f.write((const uint8_t*)&_calOffset, sizeof(_calOffset));
-  f.write((const uint8_t*)&_calRange, sizeof(_calRange));
+bool Face::SaveCalibration() const {
+  if (!LittleFS.begin(false)) {
+    LOG_PRINTLN("[CAL] filesystem unavailable; calibration not saved");
+    return false;
+  }
+
+  CalibrationCodec::Record record =
+      CalibrationCodec::Make(_calOffset, _calRange);
+
+  // Write a complete record first. This prevents a power loss from leaving a
+  // partially written calibration file at the canonical path.
+  if (LittleFsHasCalibrationFile("touch.cal.tmp")) {
+    LittleFS.remove("/touch.cal.tmp");
+  }
+  File f = LittleFS.open("/touch.cal.tmp", "w");
+  if (!f) {
+    LOG_PRINTLN("[CAL] temporary calibration file could not be opened");
+    return false;
+  }
+  size_t written = f.write(reinterpret_cast<const uint8_t*>(&record),
+                           sizeof(record));
+  f.flush();
   f.close();
+  if (written != sizeof(record)) {
+    LittleFS.remove("/touch.cal.tmp");
+    LOG_PRINTLN("[CAL] calibration write incomplete");
+    return false;
+  }
+
+  // LittleFS rename is atomic and replaces the destination, so the previous
+  // valid record remains available if power is lost before this point.
+  if (!LittleFS.rename("/touch.cal.tmp", "/touch.cal")) {
+    if (LittleFsHasCalibrationFile("touch.cal.tmp")) {
+      LittleFS.remove("/touch.cal.tmp");
+    }
+    LOG_PRINTLN("[CAL] calibration rename failed");
+    return false;
+  }
+  return true;
 }
 
 int16_t Face::RawToScreenX(uint16_t rawX, uint16_t rawY) const {
@@ -478,7 +612,7 @@ void Face::Update() {
   uint32_t elapsed = now - _bootTime;
   switch (_startupPhase) {
     case StartupPhase::BOOT:
-      if (elapsed >= 2000) {
+      if (elapsed >= STARTUP_FACE_WAKE_MS) {
         Expression.GoTo_Normal();
         _startupPhase = StartupPhase::FACE_READY;
       }
@@ -534,6 +668,7 @@ void Face::Update() {
 }
 
 bool Face::NeedsRedraw() const {
+  if (_zzzDirty) return true;
   return LeftEye.NeedsRedraw() || RightEye.NeedsRedraw();
 }
 
@@ -647,11 +782,16 @@ static void DrawCapsule(T& dpy, float x1, float y1, float x2, float y2,
 }
 
 template<typename T>
-static void DrawZ(T& dpy, int16_t x, int16_t y, uint16_t color, float scale) {
+static void DrawZ(T& dpy, int16_t centerX, int16_t centerY,
+                  uint16_t color, float scale) {
   float w = 14.0f * scale;
   float h = 12.0f * scale;
+  // Keep the original glyph shape. The 45-degree layout is defined by the
+  // center points below, not by rotating or shearing the Z itself.
   float skew = 4.0f * scale;
   int radius = scale >= 1.4f ? 3 : 2;
+  float x = centerX - (w + skew) * 0.5f;
+  float y = centerY - h * 0.5f;
   DrawCapsule(dpy, x + skew, y + radius, x + w + skew, y + radius,
               radius, color);
   DrawCapsule(dpy, x + skew, y + radius, x + w, y + h - radius,
@@ -660,8 +800,58 @@ static void DrawZ(T& dpy, int16_t x, int16_t y, uint16_t color, float scale) {
               radius, color);
 }
 
+struct SleepZPlacement {
+  int16_t centerX;
+  int16_t centerY;
+  float scale;
+};
+
+// (222,151) -> (254,183) -> (286,215): dx == dy == 32, so the
+// center-point guide line remains exactly 45 degrees. The largest Z stays
+// anchored at its previous center while the two smaller symbols move closer.
+static const SleepZPlacement SLEEP_Z_LAYOUT[] = {
+  {222, 151, 1.0f},
+  {254, 183, 1.4f},
+  {286, 215, 1.8f},
+};
+
+static bool XRangeIntersectsRegion(float centerX, float offsetX, float width,
+                                   int16_t originX, uint16_t regionWidth) {
+  const float halfWidth = width * 0.5f;
+  const float left = centerX + offsetX - halfWidth - 1.0f;
+  const float right = centerX + offsetX + halfWidth + 1.0f;
+  const float regionRight = originX + regionWidth - 1.0f;
+  return left <= regionRight && right >= originX;
+}
+
+static bool EyeIntersectsRegion(const Eye& eye, int16_t originX,
+                                uint16_t regionWidth) {
+  if (!eye.FinalConfig) return false;
+  return XRangeIntersectsRegion(eye.CenterX, eye.FinalConfig->OffsetX,
+                                eye.FinalConfig->Width, originX,
+                                regionWidth);
+}
+
+static bool ZIntersectsRegion(const SleepZPlacement& z, int16_t originX,
+                              uint16_t regionWidth) {
+  return XRangeIntersectsRegion(z.centerX, 0.0f,
+                                (14.0f + 4.0f) * z.scale, originX,
+                                regionWidth);
+}
+
+// The sprite is already laid out as TFT_eSPI's byte-swapped 16-bit pixels.
+// Sending it directly avoids pushSprite()'s extra transaction setup for each
+// tile, while the caller keeps one write transaction for the complete frame.
+static void PushSpriteRegion(TFT_eSprite& source, int16_t originX,
+                             uint16_t regionWidth) {
+  tft.setWindow(originX, 0, originX + regionWidth - 1,
+                FRAME_SPRITE_HEIGHT - 1);
+  tft.pushPixels(source.getPointer(),
+                 (uint32_t)regionWidth * FRAME_SPRITE_HEIGHT);
+}
+
 void Face::Draw() {
-  if (!spriteOk) return;
+  if (!spriteOk || _renderMode == RenderMode::NONE) return;
 
   uint32_t drawStartUs = micros();
   LeftEye.CenterX = CenterX - EyeSize / 2 - EyeInterDistance;
@@ -672,22 +862,62 @@ void Face::Draw() {
   LeftEye.Update();
   RightEye.Update();
 
-  sprite.fillSprite(BG_COLOR);
-  EyeDrawer::Draw(sprite, LeftEye.CenterX, SPRITE_HEIGHT / 2, LeftEye.FinalConfig);
-  EyeDrawer::Draw(sprite, RightEye.CenterX, SPRITE_HEIGHT / 2, RightEye.FinalConfig);
-
-  sprite.pushSprite(0, CenterY - SPRITE_HEIGHT / 2);
-
-  if (_zzzDirty) {
-    tft.fillRect(194, 186, 126, 48, BG_COLOR);
-    if (_sleeping || Behavior.CurrentEmotion == Sleepy ||
-        (gPowerManager && gPowerManager->GetState() == PowerState::SLEEP)) {
-      DrawZ(tft, 202, 190, EYE_COLOR, 1.0f);
-      DrawZ(tft, 236, 196, EYE_COLOR, 1.4f);
-      DrawZ(tft, 270, 204, EYE_COLOR, 1.8f);
+  const bool showSleepZ = _sleeping ||
+      (gPowerManager && gPowerManager->GetState() == PowerState::SLEEP);
+  if (_renderMode == RenderMode::DIRECT_TFT) {
+    tft.fillScreen(BG_COLOR);
+    EyeDrawer::Draw(tft, LeftEye.CenterX, CenterY, LeftEye.FinalConfig);
+    EyeDrawer::Draw(tft, RightEye.CenterX, CenterY, RightEye.FinalConfig);
+    if (showSleepZ) {
+      for (const SleepZPlacement& z : SLEEP_Z_LAYOUT) {
+        DrawZ(tft, z.centerX, z.centerY, EYE_COLOR, z.scale);
+      }
     }
-    _zzzDirty = false;
+  } else {
+    auto drawFrameRegion = [&](int16_t originX, uint16_t regionWidth) {
+      sprite.fillSprite(BG_COLOR);
+      if (EyeIntersectsRegion(LeftEye, originX, regionWidth)) {
+        EyeDrawer::Draw(sprite, LeftEye.CenterX - originX, CenterY,
+                        LeftEye.FinalConfig);
+      }
+      if (EyeIntersectsRegion(RightEye, originX, regionWidth)) {
+        EyeDrawer::Draw(sprite, RightEye.CenterX - originX, CenterY,
+                        RightEye.FinalConfig);
+      }
+
+      if (showSleepZ) {
+        for (const SleepZPlacement& z : SLEEP_Z_LAYOUT) {
+          if (ZIntersectsRegion(z, originX, regionWidth)) {
+            DrawZ(sprite, z.centerX - originX, z.centerY, EYE_COLOR, z.scale);
+          }
+        }
+      }
+    };
+
+    if (_renderMode == RenderMode::HALF_TILED) {
+      // Reuse one full-height tile. Each object is rasterized only in the
+      // tile it intersects; objects crossing x=FRAME_TILE_WIDTH are drawn in
+      // both tiles and clipped by TFT_eSPI.
+      drawFrameRegion(0, FRAME_TILE_WIDTH);
+      bool oldSwapBytes = tft.getSwapBytes();
+      tft.setSwapBytes(false);
+      tft.startWrite();
+      PushSpriteRegion(sprite, 0, FRAME_TILE_WIDTH);
+      drawFrameRegion(FRAME_TILE_WIDTH, FRAME_TILE_WIDTH);
+      PushSpriteRegion(sprite, FRAME_TILE_WIDTH, FRAME_TILE_WIDTH);
+      tft.endWrite();
+      tft.setSwapBytes(oldSwapBytes);
+    } else {
+      drawFrameRegion(0, FRAME_SPRITE_WIDTH);
+      bool oldSwapBytes = tft.getSwapBytes();
+      tft.setSwapBytes(false);
+      tft.startWrite();
+      PushSpriteRegion(sprite, 0, FRAME_SPRITE_WIDTH);
+      tft.endWrite();
+      tft.setSwapBytes(oldSwapBytes);
+    }
   }
+  _zzzDirty = false;
 
   uint32_t drawUs = micros() - drawStartUs;
   static uint32_t perfWindowStartMs = 0;

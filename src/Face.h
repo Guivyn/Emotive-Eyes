@@ -113,6 +113,9 @@ public:
 
   void LookFront();
   void Begin();
+  void LoadDeferredState();
+  // Explicit maintenance operation: format only when normal mounting fails.
+  bool InitializeFilesystem();
   void Update();
   void Draw();
   bool NeedsRedraw() const;
@@ -120,14 +123,14 @@ public:
   void GoToSleep();
   void WakeFromSleep();
   bool IsSleeping() const { return _sleeping; }
-  void SetCalibration(int32_t offset, int32_t range);
+  bool SetCalibration(int32_t offset, int32_t range);
   int32_t GetCalOffset() const { return _calOffset; }
   int32_t GetCalRange() const { return _calRange; }
 
 private:
   void HandleSwipe(int32_t dx, int32_t dy);
   void LoadCalibration();
-  void SaveCalibration() const;
+  bool SaveCalibration() const;
   int16_t RawToScreenX(uint16_t rawX, uint16_t rawY) const;
   int16_t RawToScreenY(uint16_t rawX, uint16_t rawY) const;
 
@@ -152,8 +155,15 @@ private:
   uint8_t _yawnState;
   unsigned long _yawnEndMs;
   unsigned long _nextYawnMs;
+  enum class RenderMode : uint8_t {
+    NONE,
+    FULL_FRAME,
+    HALF_TILED,
+    DIRECT_TFT,
+  };
   TFT_eSprite sprite;
   bool spriteOk;
+  RenderMode _renderMode;
   StartupPhase _startupPhase;
   uint32_t _bootTime;
 };

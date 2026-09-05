@@ -3,12 +3,55 @@
 #include "Eye.h"
 #include "Eye.cpp"
 
+struct RasterCapture {
+  static const int kWidth = 160;
+  static const int kHeight = 240;
+  uint16_t pixels[kWidth * kHeight];
+
+  void drawFastHLine(int x, int y, int w, uint16_t color) {
+    if (y < 0 || y >= kHeight || w <= 0 || x >= kWidth) return;
+    if (x < 0) {
+      w += x;
+      x = 0;
+    }
+    if (x + w > kWidth) w = kWidth - x;
+    if (w <= 0) return;
+    for (int i = 0; i < w; i++) pixels[y * kWidth + x + i] = color;
+  }
+};
+
+void test_sprite_scanline_matches_generic() {
+  static RasterCapture generic;
+  static const EyeConfig cases[] = {
+    {0, 0, 50, 50, 0, 0, 10, 10},
+    {-4, 0, 25, 50, 0.3f, 0, 2, 15},
+    {0, -2, 18, 50, -0.5f, -0.5f, 4, 4},
+    {2, -4, 30, 40, 0.1f, -0.1f, 6, 8},
+  };
+
+  TFT_eSprite sprite;
+  for (const EyeConfig& cfg : cases) {
+    PolygonPoint points[MAX_POLY_PTS];
+    int count = EyeDrawer::GenerateBoundary(&cfg, 80.0f, 120.0f,
+                                             points, MAX_POLY_PTS);
+    memset(generic.pixels, 0, sizeof(generic.pixels));
+    sprite.fillSprite(TFT_BLACK);
+    EyeDrawer::RasterizePolygon(generic, points, count, TFT_WHITE);
+    EyeDrawer::RasterizeSprite(sprite, points, count, TFT_WHITE);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(
+      (const uint8_t*)generic.pixels,
+      (const uint8_t*)sprite.getPointer(),
+      sizeof(generic.pixels));
+  }
+}
+
 void test_boundary_generates_closed_polygon() {
   EyeConfig cfg = {0, 0, 50, 50, 0, 0, 10, 10};
   PolygonPoint points[MAX_POLY_PTS];
   int count = EyeDrawer::GenerateBoundary(&cfg, 0, 0, points, MAX_POLY_PTS);
 
   TEST_ASSERT_GREATER_OR_EQUAL(3, count);
+  TEST_ASSERT_EQUAL(25, count);
   TEST_ASSERT_LESS_OR_EQUAL(MAX_POLY_PTS, count);
 }
 

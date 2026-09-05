@@ -48,20 +48,6 @@
 // ---- Audio amplifier (FM8002A / PAM8002A) -----------------------------
 #define PIN_AUDIO     26
 
-// ---- I2C --------------------------------------------------------------
-#define PIN_I2C_SDA   21
-#define PIN_I2C_SCL   22
-
-// ---- Battery sense (2:1 divider on GPIO39) ----------------------------
-#define PIN_BATTERY_ADC     39
-#define PIN_BATTERY_DIVIDER 2.0f
-
-// XPT2046 VBAT channel is not routed to the battery on the 024R; skip the
-// boot-time SPI read unless a board actually wires VBAT.
-#ifndef POWER_XPT_BATTERY_ENABLED
-  #define POWER_XPT_BATTERY_ENABLED 0
-#endif
-
 // ---------------------------------------------------------------------
 // TFT_eSPI aliases (must be visible before any TFT_eSPI.h include)
 // ---------------------------------------------------------------------
@@ -88,18 +74,4 @@
 #endif
 #ifndef TOUCH_CS
   #define TOUCH_CS  PIN_TOUCH_CS
-#endif
-
-// Power subsystem aliases (used by PowerManager / PowerIC)
-#ifndef POWER_BATTERY_ADC_PIN
-  #define POWER_BATTERY_ADC_PIN PIN_BATTERY_ADC
-#endif
-#ifndef POWER_BATTERY_DIVIDER
-  #define POWER_BATTERY_DIVIDER PIN_BATTERY_DIVIDER
-#endif
-#ifndef POWER_IC_I2C_SDA
-  #define POWER_IC_I2C_SDA PIN_I2C_SDA
-#endif
-#ifndef POWER_IC_I2C_SCL
-  #define POWER_IC_I2C_SCL PIN_I2C_SCL
 #endif

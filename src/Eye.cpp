@@ -14,10 +14,8 @@ static const float SIN_15[] = {
   -1.0f, -0.9659258263f, -0.8660254038f, -0.7071067812f, -0.5f, -0.2588190451f
 };
 
-EyeTransition::EyeTransition() : Animation(500) {
-  Active = false;
-  Output = EyeConfig{};
-}
+EyeTransition::EyeTransition()
+  : Output{}, Snapshot{}, Destin{}, Active(false), Animation(500) {}
 
 void EyeTransition::Start() {
   Animation.Restart();
@@ -46,9 +44,8 @@ void EyeTransition::Apply(float t) {
   Output.Radius_Bottom = Snapshot.Radius_Bottom * (1.0f - t) + Destin.Radius_Bottom * t;
 }
 
-EyeTransformation::EyeTransformation() : Animation(200) {
-  Input = nullptr;
-}
+EyeTransformation::EyeTransformation()
+  : Input(nullptr), Output{}, Origin{}, Destin{}, Animation(200) {}
 
 void EyeTransformation::Update() {
   if (!Input) return;
@@ -94,13 +91,8 @@ void EyeTransformation::Sync() {
 }
 
 EyeVariation::EyeVariation()
-  : Animation(200, 200, 200, 200, 0) {
-  Input = nullptr;
-  IsFading = false;
-  FadeStart = 0;
-  FadeValues = EyeConfig{};
-  Clear();
-}
+  : Input(nullptr), Output{}, Animation(200, 200, 200, 200, 0),
+    Values{}, FadeValues{}, FadeStart(0), IsFading(false) {}
 
 void EyeVariation::Clear() {
   Values = EyeConfig{};
@@ -163,9 +155,8 @@ bool EyeVariation::IsActive() const {
          Values.Radius_Bottom;
 }
 
-EyeBlink::EyeBlink() : Animation(100, 50, 100) {
-  Input = nullptr;
-}
+EyeBlink::EyeBlink()
+  : Input(nullptr), Output{}, Animation(100, 50, 100), BlinkWidth(60) {}
 
 void EyeBlink::Update() {
   if (!Input) return;
@@ -254,8 +245,9 @@ int EyeDrawer::GenerateBoundary(const EyeConfig* cfg, float cx, float cy,
   return cnt;
 }
 
-Eye::Eye() {
-  IsMirrored = false;
+Eye::Eye()
+  : IsMirrored(false), Transition(), Transformation(), Variation1(),
+    Variation2(), BlinkTransformation(), FinalConfig(nullptr) {
   ChainOperators();
   Variation1.Animation.SetShape(200, 200, 200, 200, 0);
   Variation2.Animation.SetShape(0, 200, 200, 200, 200);
