@@ -1,16 +1,20 @@
 # ESP32 Emotive Eyes
 
-> 当前版本：1.2.1
+> 当前版本：1.2.1 · 当前配置/验证板型：HW-950 / ESP32-2432S024R
+
+[![PlatformIO CI](https://github.com/Guivyn/Emotive-Eyes/actions/workflows/ci.yml/badge.svg)](https://github.com/Guivyn/Emotive-Eyes/actions/workflows/ci.yml)
 
 <p align="center">
   <img src="./assets/readme/hero-1.2.1.svg" width="100%" alt="ESP32 Emotive Eyes 项目概览：过程式表情眼睛、触摸交互与分级电源管理">
 </p>
 
-ESP32 + ST7796 TFT（320×240）上的过程式表情眼睛。所有面部几何都由 CPU 实时计算，不依赖任何预渲染图片资源，适合做成桌面 AI 宠物或互动小设备的“脸”。
+面向 HW-950 / ESP32-2432S024R（Sunton CYD 系列）的过程式表情眼睛。所有面部几何都由 CPU 实时计算，不依赖任何预渲染图片资源；配合 ST7796 触摸屏，可以作为桌面 AI 宠物或互动小设备的“脸”。固件使用逻辑分辨率 320×240（TFT_eSPI 原始配置为 240×320，并固定旋转为横屏），仓库同时提供匹配板型的 STEP/STL 外壳文件。
 
-## 运行效果
+## 运行行为与示例日志
 
-开机直接显示闭眼画面，约 500ms 后睁眼醒过来；之后开始随机眨眼、视线移动和表情切换。触摸屏幕可以立刻互动，串口会输出每一次手势和运行状态：
+开机直接显示闭眼画面，约 500ms 后睁眼醒来；约 5 秒后开始随机视线移动，约 8 秒后开启随机眨眼和表情切换。触摸屏幕可以立刻互动。
+
+> 下方是 `esp32dev_debug` 环境的示例日志。发布环境默认关闭运行日志；需要观察手势和状态时，请使用后文的调试环境。
 
 ```text
 === ESP32 TFT Eyes — Pure Procedural ===
@@ -25,41 +29,47 @@ ESP32 + ST7796 TFT（320×240）上的过程式表情眼睛。所有面部几何
 
 ## 特性
 
+### 交互与表情
+
 - 19 种表情预设：Normal、Angry、Glee、Happy、Sad、Worried、Focused、Annoyed、Surprised、Skeptic、Frustrated、Unimpressed、Sleepy、Suspicious、Squint、Furious、Scared、Awe、Coquette
 - 随机眨眼、视线跟随与权重化表情切换，全部基于 `millis()` 时间基准，帧率无关
-- 4 级电源状态机：ACTIVE → RELAX → IDLE → SLEEP，背光平滑渐变
 - XPT2046 触摸：单击反馈、双击复位、三连击触发 Angry、长按复位、上滑撒娇、下滑睡觉
+- BOOT 长按 2 秒进入深睡；按 BOOT 或 EN 唤醒
+
+### 固件能力
+
+- 4 级电源状态机：ACTIVE → RELAX → IDLE → SLEEP，背光平滑渐变
 - 芯片温度保护：≥70°C 强制降入 IDLE，≥80°C 强制进入 SLEEP
 - 事件驱动渲染：画面静止时停止 SPI 传输，降低待机功耗
-- 电源键：BOOT 长按 2 秒关机（深睡），按 BOOT 或 EN 开机
 - 触摸校准可运行时调整：串口 `cal` 查看，`cal <offset> <range>` 设置并持久化
-- LittleFS 默认不会自动格式化；若首次部署或文件系统损坏，可显式发送 `fs-init`（仅在挂载失败时格式化，可能清除 LittleFS 内容）
+- LittleFS 默认不会自动格式化；维护时可显式发送 `fs-init`，仅在挂载失败时格式化
 
 ## 快速开始
 
-需要先安装 [PlatformIO](https://platformio.org/)（VS Code 扩展或 CLI）。
+需要先安装 [PlatformIO](https://platformio.org/)（VS Code 扩展或 CLI），并确认接线与当前板型一致。
 
 ```bash
-pio run
-pio run --target upload
-pio device monitor -b 115200
+pio run -e esp32dev
+pio device list
+pio run -e esp32dev -t upload --upload-port YOUR_PORT
+pio device monitor --port YOUR_PORT --baud 115200
 pio test -e native
 ```
 
-连接硬件做验收时，使用 `esp32dev_debug` 环境保留串口运行日志：
+将 `YOUR_PORT` 替换为实际串口。需要运行日志时，使用 `esp32dev_debug` 环境：
 
 ```bash
-pio run -e esp32dev_debug -t upload --upload-port COM7
-pio device monitor --port COM7 --baud 115200
+pio run -e esp32dev_debug -t upload --upload-port YOUR_PORT
+pio device monitor --port YOUR_PORT --baud 115200
 ```
 
-`TFT_eSPI` 已通过 `lib_deps` 自动下载；屏幕引脚集中在 `src/board_config.h`，构建开关在 `platformio.ini` 中，无需修改 `User_Setup.h`。
+`TFT_eSPI` 已通过 `lib_deps` 自动下载；屏幕引脚集中在 [`src/board_config.h`](src/board_config.h)，构建开关在 [`platformio.ini`](platformio.ini) 中，无需修改 `User_Setup.h`。
 
 ## 硬件接线
 
 | 组件 | 型号 |
 |------|------|
-| MCU | ESP32（ESP32-WROOM-32 系列） |
+| MCU | ESP32-WROOM-32（当前配置：HW-950 / ESP32-2432S024R） |
 | 屏幕 | ST7796 SPI TFT，320×240 |
 | 触摸 | XPT2046，与 TFT 共用 SPI 总线 |
 | 背光 | GPIO27（低电平关，高电平开） |
@@ -80,16 +90,18 @@ pio device monitor --port COM7 --baud 115200
 | BOOT（电源键） | GPIO0，长按 2 秒进入深睡 |
 | I2C | SDA=GPIO21 / SCL=GPIO22 |
 
-SPI 频率为 80MHz，RGB 顺序为 `TFT_BGR`。
+SPI 频率为 80MHz，RGB 顺序为 `TFT_BGR`。当前固件使用 TFT 与 XPT2046 共用的 SPI 信号线，触摸仅单独使用 `TOUCH_CS`。
 
 ## 3D 打印外壳
 
-配套 CYD 2.4" 的外壳模型（STL）放在 [`hardware/case/`](hardware/case/)：
+最新的外壳 CAD 与打印文件放在 [`case/`](case/)。STEP 适合继续编辑，STL 可直接导入切片软件：
 
-- [cydcase.stl](hardware/case/cydcase.stl) —— 外壳主体
-- [CYDcaseDisplay.stl](hardware/case/CYDcaseDisplay.stl) —— 屏幕面板 / 前框
+| 部件 | CAD 源文件 | 打印文件 |
+|------|------------|----------|
+| 外壳主体 | [`cydcase（final）.step`](case/cydcase（final）.step) | [`cydcase（fianl）.stl`](case/cydcase（fianl）.stl) |
+| 屏幕面板 / 前框 | [`CYDcaseDisplay(final).step`](case/CYDcaseDisplay%28final%29.step) | [`CYDcaseDisplay(final).stl`](case/CYDcaseDisplay%28final%29.stl) |
 
-建议 PLA、0.2mm 层高打印，打印前按打印机尺寸检查缩放。
+另附：[ESP32 开发板说明书](case/esp32开发板说明书.doc)。建议 PLA、0.2mm 层高打印，打印前按打印机尺寸检查缩放。旧版 STL 仍保留在 [`hardware/case/`](hardware/case/) 供对照。
 
 ## 渲染管线
 
@@ -140,6 +152,15 @@ CPU 频率随状态调整：ACTIVE 240MHz、RELAX 160MHz、IDLE 80MHz、SLEEP 80
 | `POWER_TEMP_PROTECT_ENABLED` | 1 | 芯片温度保护 |
 | `SERIAL_DEBUG_ENABLED` | 0 | 串口调试日志；调试时改为 1 |
 
+## 文档与验证
+
+- [技术文档](docs/技术文档.md)：渲染管线、动画、电源管理与校准实现
+- [引脚参考手册](docs/ESP32-WROOM-32_引脚参考手册.md)：当前板型的外设映射与硬件注意事项
+- [引脚功能图解](docs/ESP32-WROOM-32_引脚功能图解.md)：板载外设和接口示意
+- [PlatformIO CI](.github/workflows/ci.yml)：固件构建与主机侧测试
+
+本地验证命令就是快速开始中的 `pio test -e native` 和 `pio run -e esp32dev`；硬件烧录/串口验证应使用 `esp32dev_debug`，屏幕显示质量仍需以实际屏幕观察为准。
+
 ## 项目结构
 
 ```text
@@ -151,6 +172,12 @@ ESP32-demo/
 ├── README.md
 ├── assets/readme/
 │   └── hero-1.2.1.svg
+├── case/
+│   ├── cydcase（final）.step
+│   ├── cydcase（fianl）.stl
+│   ├── CYDcaseDisplay(final).step
+│   ├── CYDcaseDisplay(final).stl
+│   └── esp32开发板说明书.doc
 ├── hardware/case/
 │   ├── cydcase.stl
 │   └── CYDcaseDisplay.stl
@@ -188,4 +215,4 @@ ESP32-demo/
 
 本项目基于 playfultechnology 的 ESP32 OLED Emotive Eyes 移植改造，原始项目由
 Alastair Aitchison 发布，遵循 MIT 许可。本仓库以 GPL-3.0 发布，完整条款见
-`LICENSE`。
+[`LICENSE`](LICENSE)。

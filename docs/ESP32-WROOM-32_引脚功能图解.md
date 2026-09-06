@@ -1,4 +1,4 @@
-# ESP32-WROOM-32 开发板 — 引脚功能图解
+# HW-950 / ESP32-2432S024R 开发板 — 引脚功能图解
 
 > 下方 SVG 示意图标注了主要引脚和板载外设的位置关系（非实际尺寸比例）。
 
@@ -14,7 +14,7 @@
   <rect x="50" y="40" width="800" height="340" rx="8" fill="#1a2a4a" stroke="#2a4a7a" stroke-width="2" filter="url(#shadow)"/>
 
   <!-- 标题 -->
-  <text x="450" y="65" text-anchor="middle" fill="#8ab4f8" font-size="15" font-weight="bold">ESP32-WROOM-32 开发板 — 引脚参考图</text>
+  <text x="450" y="65" text-anchor="middle" fill="#8ab4f8" font-size="15" font-weight="bold">HW-950 / ESP32-2432S024R — 引脚参考图</text>
 
   <!-- ESP32-WROOM-32 模块（居中凸出） -->
   <rect x="280" y="88" width="340" height="68" rx="6" fill="#2d5a1e" stroke="#4a9a30" stroke-width="1.5"/>
@@ -65,7 +65,7 @@
   <rect x="200" y="180" width="500" height="100" rx="4" fill="#1a3a3a" stroke="#3a7a7a" stroke-width="1.5" stroke-dasharray="5,3"/>
   <text x="450" y="220" text-anchor="middle" fill="#5ababa" font-size="12" font-weight="bold">2.4" ST7796 触摸屏 (320×240)</text>
   <text x="450" y="240" text-anchor="middle" fill="#4a9a9a" font-size="10">TFT: IO12(MISO) · IO13(MOSI) · IO14(SCLK) · IO15(CS) · IO2(DC) · IO27(BL)</text>
-  <text x="450" y="253" text-anchor="middle" fill="#d4a040" font-size="9">TOUCH (XPT2046): IO33(CS) · IO25(CLK) · IO32(MOSI) · IO39(MISO ⚠️) · IO36(IRQ ⚠️)</text>
+  <text x="450" y="253" text-anchor="middle" fill="#d4a040" font-size="9">TOUCH (XPT2046, shared SPI): IO33(CS) · IO14(CLK) · IO13(MOSI) · IO12(MISO) · IRQ optional IO36</text>
 
   <!-- TF 卡槽 -->
   <rect x="670" y="88" width="100" height="50" rx="3" fill="#2a3a2a" stroke="#5a8a5a" stroke-width="1"/>
@@ -113,7 +113,7 @@
 
 > 注意：上图仅为引脚功能示意布局，不反映实际 PCB 物理排列。实际焊接与接线请以 PCB 丝印为准。
 >
-> **⚡ 触摸控制器 (XPT2046) 引脚警告**：IO39（MISO）和 IO36（IRQ）是 ESP32 的 Input-Only 引脚——没有内部上拉/下拉电阻，不能做 OUTPUT。IRQ（IO36）若悬空会导致触摸检测失效，建议焊接 10kΩ 上拉电阻至 3.3V，或在软件中绕过 IRQ 改用 SPI Z 轴采样判断按下。
+> **⚡ 触摸控制器 (XPT2046)**：当前固件使用与 TFT 共用的 IO12/13/14，并通过 SPI Z 轴压力判断按下，不依赖 IRQ。只有启用 `POWER_LIGHT_SLEEP_ENABLED=1` 时，才需要将 IRQ 接到 IO36，并补 10kΩ 上拉至 3.3V。
 >
 > **⚡ GPIO4 冲突**：GPIO4 同时用作 RGB LED 和 TFT_RST。将 `TFT_RST` 设为 `-1` 可避免冲突。
 

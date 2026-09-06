@@ -70,18 +70,17 @@
 
 > **注意**：GPIO4 在此开发板上同时被 RGB LED 占用。如果 TFT_eSPI 驱动将 TFT_RST 配置为 GPIO4，会导致电平冲突。建议将 TFT_RST 设为 -1（不使用软复位），或换用空闲 GPIO。
 
-### 4.1.1 触摸控制器 — XPT2046（独立软 SPI）
+### 4.1.1 触摸控制器 — XPT2046（与 TFT 共用 SPI）
 
 | 信号 | GPIO | 备注 |
 |------|------|------|
 | TOUCH_CS   | GPIO33 | 片选 |
-| TOUCH_CLK  | GPIO25 | 时钟 |
-| TOUCH_MOSI | GPIO32 | 数据输出（MCU→XPT2046） |
-| TOUCH_MISO | GPIO39 | 数据输入（XPT2046→MCU）**⚠️ Input Only，严禁写操作** |
-| TOUCH_IRQ  | GPIO36 | 触摸中断（按下时拉低）**⚠️ Input Only，无内部上拉** |
+| TOUCH_CLK  | GPIO14 | 与 TFT_SCLK 共用 |
+| TOUCH_MOSI | GPIO13 | 与 TFT_MOSI 共用 |
+| TOUCH_MISO | GPIO12 | 与 TFT_MISO 共用 |
+| TOUCH_IRQ  | 未接入 | 常规模式通过 SPI Z 轴压力判断按下 |
 
-> **关键硬件警告**：GPIO36（SENSOR_VP）和 GPIO39（SENSOR_VN）是 ESP32 的 Input-Only 引脚——
-> 内部没有上拉/下拉电阻，也不能配置为 OUTPUT。代码中只能使用 `digitalRead`，绝对不能对这两个引脚执行 `digitalWrite` 或 `pinMode(x, OUTPUT)`。
+> 当前固件只有在启用 `POWER_LIGHT_SLEEP_ENABLED=1` 时才使用 GPIO36 作为可选的触摸唤醒信号；GPIO36 没有内部上拉，需要外接 10kΩ 上拉到 3.3V。
 
 ### 4.2 TF 卡模块 — SPI
 
@@ -156,12 +155,10 @@
 | GPIO3 | UART RX | 串口输入 |
 | GPIO2 | TFT_DC | 显示 |
 | GPIO4 | RGB LED / TFT_RST | ⚠️ 与 TFT_RST 共用，见 4.3 节 |
-| GPIO25 | TOUCH_CLK | 触摸 SPI 时钟 |
-| GPIO32 | TOUCH_MOSI | 触摸 SPI 数据输出 |
 | GPIO5 | TF_CS | TF 卡 |
-| GPIO12 | TFT_MISO | 显示 |
-| GPIO13 | TFT_MOSI | 显示 |
-| GPIO14 | TFT_SCLK | 显示 |
+| GPIO12 | TFT_MISO / TOUCH_MISO | 共用 SPI |
+| GPIO13 | TFT_MOSI / TOUCH_MOSI | 共用 SPI |
+| GPIO14 | TFT_SCLK / TOUCH_CLK | 共用 SPI |
 | GPIO15 | TFT_CS | 显示 |
 | GPIO16 | RGB LED | 指示灯 |
 | GPIO17 | RGB LED | 指示灯 |
@@ -173,8 +170,8 @@
 | GPIO26 | AUDIO | 音频功放输出 |
 | GPIO27 | TFT_BL | 显示背光 |
 | GPIO33 | TOUCH_CS | 触控片选 |
-| GPIO36 | TOUCH_IRQ | 触摸中断 ⚠️ Input Only，无内部上拉 |
-| GPIO39 | TOUCH_MISO | 触摸 SPI 数据输入 ⚠️ Input Only |
+| GPIO36 | TOUCH_IRQ（可选） | 仅 LightSleep 唤醒使用，需外接 10kΩ 上拉 |
+| GPIO39 | 当前固件未使用 | Input Only |
 | GPIO34 | 光敏电阻 | Input Only / ADC1_CH6 |
 | GPIO35 | 拓展 IO | Input Only / ADC1_CH7 |
 
@@ -191,13 +188,12 @@ ESP32 的 GPIO34、GPIO35、GPIO36（SENSOR_VP）、GPIO39（SENSOR_VN）是**�
 - 代码中只能使用 `pinMode(x, INPUT)` + `digitalRead(x)`
 - 绝对不能执行 `digitalWrite` 或 `pinMode(x, OUTPUT)`
 
-### 8.2 GPIO36 触摸中断悬空风险
+### 8.2 GPIO36 LightSleep 唤醒信号（可选）
 
-XPT2046 的 IRQ 引脚（GPIO36）是开漏输出，按下时拉低，释放时高阻态。由于 GPIO36 没有内部上拉，**在无外部上拉电阻时电平不可靠**：
+常规运行模式不依赖 XPT2046 的 IRQ，而是通过 SPI 读取 Z 轴压力值判断触摸。启用 `POWER_LIGHT_SLEEP_ENABLED=1` 后，GPIO36 作为 RTC 唤醒输入；由于它没有内部上拉，必须外接 10kΩ 上拉到 3.3V：
 
-- 可能一直读到 LOW，导致触摸状态机认为屏幕始终被按下
-- 可能随机跳变，导致误触发
-- **解决方式**：在 IRQ 引脚焊接 10kΩ 上拉电阻至 3.3V；或软件层面绕过 IRQ，改用 SPI 读取 Z 轴压力值判断是否按下
+- 无外部上拉时可能随机跳变，导致 LightSleep 唤醒行为不可靠
+- 未启用 LightSleep 时无需连接该信号，触摸仍通过共享 SPI 工作
 
 ### 8.3 GPIO4 复用冲突
 
@@ -209,7 +205,7 @@ GPIO4 同时连接 RGB LED 和 TFT 复位引脚（TFT_RST）。如果 `User_Setu
 
 ### 8.4 触摸 SPI 引脚
 
-触摸控制器 XPT2046 使用独立的软 SPI 总线，不与 TFT 的硬件 SPI 共享：
+触摸控制器 XPT2046 与 TFT 共用 SPI 信号线，仅片选独立：
 
-- TOUCH_CS (GPIO33)、TOUCH_CLK (GPIO25)、TOUCH_MOSI (GPIO32)、TOUCH_MISO (GPIO39)
-- MISO 和 IRQ 使用了 Input-Only 引脚，驱动代码必须确保只读不写
+- TOUCH_CS (GPIO33)、TOUCH_CLK (GPIO14)、TOUCH_MOSI (GPIO13)、TOUCH_MISO (GPIO12)
+- 常规模式不接入 IRQ；启用 LightSleep 时才需要 GPIO36 + 外部上拉
