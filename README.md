@@ -101,7 +101,7 @@ SPI 频率为 80MHz，RGB 顺序为 `TFT_BGR`。当前固件使用 TFT 与 XPT20
 | 外壳主体 | [`cydcase（final）.step`](case/cydcase（final）.step) | [`cydcase（fianl）.stl`](case/cydcase（fianl）.stl) |
 | 屏幕面板 / 前框 | [`CYDcaseDisplay(final).step`](case/CYDcaseDisplay%28final%29.step) | [`CYDcaseDisplay(final).stl`](case/CYDcaseDisplay%28final%29.stl) |
 
-另附：[ESP32 开发板说明书](case/esp32开发板说明书.doc)。建议 PLA、0.2mm 层高打印，打印前按打印机尺寸检查缩放。旧版 STL 仍保留在 [`hardware/case/`](hardware/case/) 供对照。
+另附：[ESP32 开发板说明书](case/esp32开发板说明书.doc)。建议 PLA、0.2mm 层高打印，打印前按打印机尺寸检查缩放。
 
 ## 渲染管线
 
@@ -178,9 +178,6 @@ ESP32-demo/
 │   ├── CYDcaseDisplay(final).step
 │   ├── CYDcaseDisplay(final).stl
 │   └── esp32开发板说明书.doc
-├── hardware/case/
-│   ├── cydcase.stl
-│   └── CYDcaseDisplay.stl
 ├── docs/
 │   ├── 技术文档.md
 │   ├── ESP32-WROOM-32_引脚参考手册.md
