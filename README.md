@@ -34,7 +34,7 @@
 - 19 种表情预设：Normal、Angry、Glee、Happy、Sad、Worried、Focused、Annoyed、Surprised、Skeptic、Frustrated、Unimpressed、Sleepy、Suspicious、Squint、Furious、Scared、Awe、Coquette
 - 随机眨眼、视线跟随与权重化表情切换，全部基于 `millis()` 时间基准，帧率无关
 - XPT2046 触摸：单击反馈、双击复位、三连击触发 Angry、长按复位、上滑撒娇、下滑睡觉
-- BOOT 长按 2 秒进入深睡；按 BOOT 或 EN 唤醒
+- BOOT 作为状态输入：开机状态长按关机，软件关机状态忽略 BOOT；只能按 RST/EN 重新开机。长期断开电池使用独立电池电源键 SW1
 
 ### 固件能力
 
@@ -75,7 +75,7 @@ pio device monitor --port YOUR_PORT --baud 115200
 | 背光 | GPIO27（低电平关，高电平开） |
 | RGB LED | R=GPIO17 / G=GPIO4 / B=GPIO16（低电平点亮） |
 | 光敏 | GPIO34 |
-| 电池 | 外接电池仅作供电，固件不读取电量/充电状态 |
+| 电池 | BAT+/BAT− 接板载电源电路；电压采样尚无已验证接线，串口 `power-scan` 可诊断 |
 
 | 信号 | GPIO |
 |------|------|
@@ -87,7 +87,7 @@ pio device monitor --port YOUR_PORT --baud 115200
 | TFT_RST | 不接（-1，屏幕复位接板级 RESET） |
 | TFT_BL | GPIO27 |
 | TOUCH_CS | GPIO33 |
-| BOOT（电源键） | GPIO0，长按 2 秒进入深睡 |
+| BOOT（输入键） | GPIO0；运行时长按进入软件待机，待机时忽略 |
 | I2C | SDA=GPIO21 / SCL=GPIO22 |
 
 SPI 频率为 80MHz，RGB 顺序为 `TFT_BGR`。当前固件使用 TFT 与 XPT2046 共用的 SPI 信号线，触摸仅单独使用 `TOUCH_CS`。
@@ -119,6 +119,10 @@ Transition → Transformation → Variation1 → Variation2 → Blink → FinalC
 
 ## 电源管理
 
+电池掉电排查、串口命令、采样接线条件与验证边界见 [电池供电诊断](docs/电池供电诊断.md)。独立电池电源键 SW1 与 BOOT/RST 不同；电源输出已关闭时应使用 SW1 恢复。
+
+黑屏待机为针对低负载断电的待验证软件方案：关闭背光和屏幕控制器后进入 Deep Sleep，不配置 BOOT/定时器唤醒，只能按 RST/EN 重新启动；长期存放请用独立电池电源键关断。
+
 | 状态 | 进入条件（距上次交互） | 背光 | 刷新率 | 表情行为 |
 |------|------------------------|------|--------|----------|
 | ACTIVE | 0–60 秒 | 100% | 25ms（40fps） | 完整动画 + 随机表情 |
@@ -127,7 +131,7 @@ Transition → Transformation → Variation1 → Variation2 → Blink → FinalC
 | SLEEP | 5 分钟 | 0% | 不渲染，50ms 触摸轮询 | Sleepy 闭眼静态画面 |
 
 任意触摸都会回到 ACTIVE 并重置空闲计时。背光使用 Gamma 2.2 感知曲线，状态切换时以缓动曲线平滑渐变（初始快、接近目标慢），避免亮度跳变。
-CPU 频率随状态调整：ACTIVE 240MHz、RELAX 160MHz、IDLE 80MHz、SLEEP 80MHz；进入 SLEEP 时发送 `DISPOFF (0x28)`，唤醒时发送 `DISPON (0x29)` 降低面板功耗。
+CPU 频率随状态调整：ACTIVE 240MHz、RELAX 160MHz、IDLE 80MHz、SLEEP 80MHz；手动 `SOFT_OFF` 关闭显示后进入 Deep Sleep。进入 SLEEP/SOFT_OFF 时发送 `DISPOFF (0x28)`，SOFT_OFF 还发送 `SLPIN (0x10)`；RST/EN 复位后完整执行启动流程。
 
 ## 触摸手势
 

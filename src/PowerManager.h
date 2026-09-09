@@ -8,7 +8,8 @@ enum class PowerState : uint8_t {
   ACTIVE,
   RELAX,
   IDLE,
-  SLEEP
+  SLEEP,
+  SOFT_OFF
 };
 
 class Face;
@@ -31,6 +32,7 @@ public:
 
   // Called by Face to drop into low-power IDLE while keeping the face visible.
   void EnterIdle();
+  void EnterSoftOff();
 
   // Main-loop cadence: fast in ACTIVE, slower in RELAX/IDLE, poll-only in SLEEP.
   uint32_t GetFrameIntervalMs() const;
@@ -55,6 +57,7 @@ private:
   unsigned long _lastStatsLogMs;
   float _chipTempC;
   bool _overheatRecovery;
+  bool _displaySleepCommanded;
   uint8_t _gammaLut[101];
 
   void SetState(PowerState s);
@@ -64,4 +67,6 @@ private:
   void SampleTemperature();
   const char* StateName() const;
   void EnterLightSleep();
+  void EnterSoftOffLightSleep();
+  void EnterSoftOffDeepSleep();
 };

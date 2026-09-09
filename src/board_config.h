@@ -25,8 +25,9 @@
 #define PIN_TOUCH_CS  33
 
 // ---- Buttons ----------------------------------------------------------
-// BOOT button: hold ~2s to power off (deep sleep). EN is the hardware
-// power-on/reset; GPIO0 also wakes from deep sleep.
+// BOOT: read-only input; while running hold 2s to enter software standby,
+// while in standby press/release to wake. EN resets only while supply exists;
+// SW1 controls battery power.
 #define PIN_BTN_POWER 0
 
 // ---- Ambient light sensor (LDR) --------------------------------------

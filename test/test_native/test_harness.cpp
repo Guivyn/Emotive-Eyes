@@ -11,6 +11,8 @@ void test_boundary_handles_null_config();
 void test_transition_reaches_destination();
 void test_calibration_record_validates();
 void test_calibration_record_rejects_corruption();
+void test_power_button_release_and_bounce();
+void test_power_button_millis_wrap();
 
 unsigned long g_mockMillis = 0;
 
@@ -36,5 +38,7 @@ int main(int argc, char** argv) {
   RUN_TEST(test_transition_reaches_destination);
   RUN_TEST(test_calibration_record_validates);
   RUN_TEST(test_calibration_record_rejects_corruption);
+  RUN_TEST(test_power_button_release_and_bounce);
+  RUN_TEST(test_power_button_millis_wrap);
   return UNITY_END();
 }

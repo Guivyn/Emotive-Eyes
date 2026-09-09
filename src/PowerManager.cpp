@@ -2,6 +2,7 @@
 #include "FacePower.h"
 #include "Config.h"
 #include "Log.h"
+#include "board_config.h"
 
 extern TFT_eSPI tft;
 
@@ -35,6 +36,7 @@ PowerManager::PowerManager(Face& face, uint8_t backlightPin)
     _lastStatsLogMs(0),
     _chipTempC(30.0f),
     _overheatRecovery(false),
+    _displaySleepCommanded(false),
     _gammaLut{} {
   for (int i = 0; i <= 100; i++) {
     _gammaLut[i] = (uint8_t)(255.0f * powf(i / 100.0f, 2.2f) + 0.5f);
@@ -52,6 +54,12 @@ void PowerManager::Begin() {
 
 void PowerManager::Update() {
   unsigned long now = millis();
+  if (_state == PowerState::SOFT_OFF) {
+    // RST/EN is the only wake path. This call does not return until hardware
+    // reset; no timer, UART polling, or temperature sampling remains active.
+    EnterSoftOffDeepSleep();
+    return;
+  }
   UpdateBacklight();
 
 #if POWER_TEMP_PROTECT_ENABLED
@@ -122,12 +130,17 @@ void PowerManager::EnterIdle() {
   SetState(PowerState::IDLE);
 }
 
+void PowerManager::EnterSoftOff() {
+  SetState(PowerState::SOFT_OFF);
+}
+
 uint32_t PowerManager::GetFrameIntervalMs() const {
   switch (_state) {
     case PowerState::ACTIVE: return FRAME_INTERVAL_ACTIVE_MS;
     case PowerState::RELAX:  return FRAME_INTERVAL_RELAX_MS;
     case PowerState::IDLE:   return FRAME_INTERVAL_IDLE_MS;
     case PowerState::SLEEP:  return SLEEP_POLL_INTERVAL_MS;
+    case PowerState::SOFT_OFF: return SLEEP_POLL_INTERVAL_MS;
   }
   return FRAME_INTERVAL_ACTIVE_MS;
 }
@@ -139,6 +152,7 @@ static void ApplyCpuFrequency(PowerState state) {
     case PowerState::RELAX:  mhz = CPU_MHZ_RELAX;  break;
     case PowerState::IDLE:   mhz = CPU_MHZ_IDLE;   break;
     case PowerState::SLEEP:  mhz = CPU_MHZ_SLEEP;  break;
+    case PowerState::SOFT_OFF: mhz = CPU_MHZ_SLEEP;  break;
   }
   setCpuFrequencyMhz(mhz);
   LOG_PRINTF("[POWER] cpu=%uMHz\n", getCpuFrequencyMhz());
@@ -150,6 +164,11 @@ void PowerManager::SetState(PowerState s) {
   switch (s) {
     case PowerState::ACTIVE:
       ApplyCpuFrequency(s);
+      if (_displaySleepCommanded) {
+        tft.writecommand(0x11); // SLPOUT
+        delay(120);
+        _displaySleepCommanded = false;
+      }
       tft.writecommand(0x29); // DISPON
       SetBacklight(100);
       FacePower_Wake(_face);
@@ -173,6 +192,25 @@ void PowerManager::SetState(PowerState s) {
       ApplyCpuFrequency(s);
       tft.writecommand(0x28); // DISPOFF
       LOG_PRINTLN("[POWER] state=SLEEP");
+      break;
+    case PowerState::SOFT_OFF:
+      _backlightLevel = _stateBacklightTarget = _targetBacklightLevel = 0;
+      ApplyBacklight(0);
+      tft.writecommand(0x28); // display off
+      tft.writecommand(0x10); // panel sleep; lower controller current
+      _displaySleepCommanded = true;
+      pinMode(PIN_TFT_CS, OUTPUT); digitalWrite(PIN_TFT_CS, HIGH);
+      pinMode(PIN_TOUCH_CS, OUTPUT); digitalWrite(PIN_TOUCH_CS, HIGH);
+      pinMode(PIN_TFT_SCLK, OUTPUT); digitalWrite(PIN_TFT_SCLK, LOW);
+      pinMode(PIN_TFT_MOSI, OUTPUT); digitalWrite(PIN_TFT_MOSI, LOW);
+      pinMode(PIN_TFT_DC, OUTPUT); digitalWrite(PIN_TFT_DC, LOW);
+      pinMode(PIN_SD_CS, OUTPUT); digitalWrite(PIN_SD_CS, HIGH);
+      pinMode(PIN_AUDIO, OUTPUT); digitalWrite(PIN_AUDIO, LOW);
+      pinMode(PIN_LED_R, OUTPUT); digitalWrite(PIN_LED_R, HIGH);
+      pinMode(PIN_LED_G, OUTPUT); digitalWrite(PIN_LED_G, HIGH);
+      pinMode(PIN_LED_B, OUTPUT); digitalWrite(PIN_LED_B, HIGH);
+      setCpuFrequencyMhz(80);
+      Serial.println("[POWER] state=SOFT_OFF deep_sleep=1 wake=RST/EN");
       break;
   }
 }
@@ -213,6 +251,7 @@ const char* PowerManager::StateName() const {
     case PowerState::RELAX:  return "RELAX";
     case PowerState::IDLE:   return "IDLE";
     case PowerState::SLEEP:  return "SLEEP";
+    case PowerState::SOFT_OFF: return "SOFT_OFF";
   }
   return "?";
 }
@@ -224,4 +263,16 @@ void PowerManager::EnterLightSleep() {
   esp_sleep_enable_ext0_wakeup(TOUCH_WAKE_GPIO, 0);
   esp_sleep_enable_timer_wakeup(LIGHT_SLEEP_PERIOD_MS * 1000ULL);
   esp_light_sleep_start();
+}
+
+void PowerManager::EnterSoftOffLightSleep() {
+  esp_light_sleep_start();
+}
+
+void PowerManager::EnterSoftOffDeepSleep() {
+  // No GPIO/timer wake source is registered. The board's hardware RST/EN
+  // line resets the ESP32 and starts setup() again while supply remains on.
+  Serial.flush();
+  delay(10);
+  esp_deep_sleep_start();
 }

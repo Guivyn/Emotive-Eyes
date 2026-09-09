@@ -6,6 +6,8 @@
 #include "Face.h"
 #include "PowerManager.h"
 #include "Version.h"
+#include "PowerButton.h"
+#include "PowerDiagnostics.h"
 #include <string.h>
 
 TFT_eSPI tft = TFT_eSPI();
@@ -18,7 +20,8 @@ void setup() {
   Serial.setDebugOutput(true);
 #endif
 
-  // BOOT button (GPIO0) doubles as the power key: hold ~2s to deep sleep.
+  // BOOT is an input: a long press while running requests SOFT_OFF. While
+  // already in SOFT_OFF it is ignored; hardware RST/EN is the wake path.
   pinMode(PIN_BTN_POWER, INPUT_PULLUP);
 
   LOG_PRINTLN("\n=== ESP32 TFT Eyes - Pure Procedural ===");
@@ -114,7 +117,14 @@ void loop() {
             Serial.println("[CAL] usage: cal <offset> <range>");
           }
         } else if (strcmp(cmdLine, "help") == 0) {
-          Serial.println("[LOG] commands: cal [offset range] | fs-init | help");
+          Serial.println("[LOG] commands: cal [offset range] | fs-init | power | power-scan | off | wake | help");
+        } else if (strcmp(cmdLine, "power") == 0 || strcmp(cmdLine, "power-scan") == 0) {
+          PrintPowerDiagnostics(strcmp(cmdLine, "power-scan") == 0);
+          Serial.printf("[POWER] state=%s\n", gPowerManager && gPowerManager->GetState() == PowerState::SOFT_OFF ? "SOFT_OFF" : "RUNNING");
+        } else if (strcmp(cmdLine, "off") == 0) {
+          if (gPowerManager) gPowerManager->EnterSoftOff();
+        } else if (strcmp(cmdLine, "wake") == 0) {
+          if (gPowerManager) gPowerManager->NotifyInteraction();
         } else if (strcmp(cmdLine, "fs-init") == 0) {
           bool initialized = gFace && gFace->InitializeFilesystem();
           Serial.printf("[FS] %s\n", initialized ? "ready" : "init failed");
@@ -138,47 +148,24 @@ void loop() {
   uint32_t now = millis();
   uint32_t dt = now - lastFrameMs;
 
-  // Power key: BOOT (GPIO0) held for 2s -> deep sleep. Wake via BOOT
-  // (EXT0 level wake) or the EN/reset button (hardware).
-  static bool btnWasDown = false;
-  static unsigned long btnDownMs = 0;
-  bool btnDown = digitalRead(PIN_BTN_POWER) == LOW;
-  if (btnDown && !btnWasDown) {
-    btnWasDown = true;
-    btnDownMs = now;
-  } else if (!btnDown) {
-    btnWasDown = false;
-  }
-  if (btnWasDown && now - btnDownMs >= 2000UL) {
-    LOG_PRINTLN("[POWER] BOOT held 2s -> shutdown (release BOOT to confirm)");
-#if SERIAL_DEBUG_ENABLED
-    Serial.flush();
-#endif
-    // Require a confirmed release before sleeping: entering deep sleep while
-    // the button is still held would trigger the EXT0 level wake instantly,
-    // which looks like "black screen then auto reboot".
-    unsigned long releaseDeadline = now + 10000UL;
-    bool released = false;
-    while (millis() < releaseDeadline) {
-      if (digitalRead(PIN_BTN_POWER) == HIGH) { released = true; break; }
-      delay(25);
-    }
-    if (!released) {
-      LOG_PRINTLN("[POWER] shutdown cancelled (button held too long)");
-      btnWasDown = false;
-      btnDownMs = now; // require a fresh 2s hold next time
-    } else {
-      delay(150); // debounce after release
-      LOG_PRINTLN("[POWER] entering deep sleep (press BOOT or EN to wake)");
-      tft.fillScreen(TFT_BLACK);
-      digitalWrite(TFT_BL, LOW);
-      esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_BTN_POWER, LOW);
-      esp_deep_sleep_start();
+  static PowerButton powerButton;
+  const auto buttonEvent = powerButton.Update(digitalRead(PIN_BTN_POWER) == LOW, now);
+  if (gPowerManager && buttonEvent != PowerButton::Event::NONE) {
+    if (gPowerManager->GetState() == PowerState::SOFT_OFF) {
+      // BOOT is intentionally ignored in SOFT_OFF. Press RST/EN to reboot.
+    } else if (buttonEvent == PowerButton::Event::LONG_PRESS) {
+      // While running, a long press is the explicit software-off gesture.
+      gPowerManager->EnterSoftOff();
     }
   }
 
   // Power state machine runs every iteration so timers stay responsive.
   if (gPowerManager) gPowerManager->Update();
+
+  if (gPowerManager && gPowerManager->GetState() == PowerState::SOFT_OFF) {
+    // SOFT_OFF normally never returns here: PowerManager enters Deep Sleep.
+    return;
+  }
 
   // SLEEP has no animation to render. Avoid the former 1ms busy loop while
   // retaining responsive touch/BOOT wake-up checks.
