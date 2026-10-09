@@ -76,7 +76,13 @@ void setup() {
 
 void loop() {
   static uint32_t lastFrameMs = 0;
-  static uint32_t lastLoopLogMs = 0;
+#if SERIAL_DEBUG_ENABLED
+  static uint32_t loopPerfWindowStartMs = 0;
+  static uint32_t loopPerfFrames = 0;
+  static uint32_t loopPerfTotalDt = 0;
+  static uint32_t loopPerfMaxDt = 0;
+  static uint32_t loopPerfLateFrames = 0;
+#endif
   static bool deferredStateLoaded = false;
   static char cmdLine[64] = {};
   static size_t cmdLength = 0;
@@ -116,8 +122,30 @@ void loop() {
           } else {
             Serial.println("[CAL] usage: cal <offset> <range>");
           }
+        } else if (strcmp(cmdLine, "brightness") == 0) {
+          if (gPowerManager) {
+            Serial.printf("[BRIGHTNESS] %u%% (range %u-%u)\n",
+                          (unsigned)gPowerManager->GetBrightness(),
+                          (unsigned)PowerManager::MIN_BRIGHTNESS_PERCENT,
+                          (unsigned)PowerManager::MAX_BRIGHTNESS_PERCENT);
+          }
+        } else if (strncmp(cmdLine, "brightness ", 11) == 0) {
+          int brightness = -1;
+          char trailing = '\0';
+          if (gPowerManager &&
+              sscanf(cmdLine + 11, "%d %c", &brightness, &trailing) == 1 &&
+              brightness >= PowerManager::MIN_BRIGHTNESS_PERCENT &&
+              brightness <= PowerManager::MAX_BRIGHTNESS_PERCENT) {
+            bool saved = gPowerManager->SetBrightness((uint8_t)brightness);
+            Serial.printf("[BRIGHTNESS] set=%d%% saved=%s\n", brightness,
+                          saved ? "yes" : "no");
+          } else {
+            Serial.printf("[BRIGHTNESS] usage: brightness <%u-%u>\n",
+                          (unsigned)PowerManager::MIN_BRIGHTNESS_PERCENT,
+                          (unsigned)PowerManager::MAX_BRIGHTNESS_PERCENT);
+          }
         } else if (strcmp(cmdLine, "help") == 0) {
-          Serial.println("[LOG] commands: cal [offset range] | fs-init | power | power-scan | off | wake | help");
+          Serial.println("[LOG] commands: cal [offset range] | brightness [20-100] | fs-init | power | power-scan | off | wake | help");
         } else if (strcmp(cmdLine, "power") == 0 || strcmp(cmdLine, "power-scan") == 0) {
           PrintPowerDiagnostics(strcmp(cmdLine, "power-scan") == 0);
           Serial.printf("[POWER] state=%s\n", gPowerManager && gPowerManager->GetState() == PowerState::SOFT_OFF ? "SOFT_OFF" : "RUNNING");
@@ -168,10 +196,11 @@ void loop() {
   }
 
   // SLEEP has no animation to render. Avoid the former 1ms busy loop while
-  // retaining responsive touch/BOOT wake-up checks.
+  // retaining responsive touch/BOOT wake-up checks. Use a faster poll only
+  // during the short backlight fade; normal sleep returns to the 50ms cadence.
   if (gPowerManager && gPowerManager->GetState() == PowerState::SLEEP) {
     if (gFace) gFace->UpdateTouch();
-    delay(SLEEP_POLL_INTERVAL_MS);
+    delay(gPowerManager->GetFrameIntervalMs());
     return;
   }
 
@@ -190,13 +219,44 @@ void loop() {
   lastFrameMs = now;
 
   if (gFace) {
+#if defined(PERF_CONTINUOUS_ANIMATION)
+    static const eEmotions benchmarkEmotions[] = {
+      Normal, Happy, Worried, Surprised, Glee, Sleepy, Coquette, Skeptic
+    };
+    static uint8_t benchmarkEmotionIndex = 0;
+    static uint32_t nextBenchmarkEmotionMs = 0;
+    if (nextBenchmarkEmotionMs == 0) {
+      nextBenchmarkEmotionMs = now + 450;
+    } else if ((int32_t)(now - nextBenchmarkEmotionMs) >= 0) {
+      benchmarkEmotionIndex = (benchmarkEmotionIndex + 1) %
+          (sizeof(benchmarkEmotions) / sizeof(benchmarkEmotions[0]));
+      gFace->Behavior.GoToEmotion(benchmarkEmotions[benchmarkEmotionIndex]);
+      nextBenchmarkEmotionMs = now + 450;
+    }
+#endif
     gFace->Update();
   }
 
-  if (now - lastLoopLogMs >= 5000) {
-    lastLoopLogMs = now;
-    LOG_PRINTF("[LOOP] frame=%ums | heap=%u\n", dt, ESP.getFreeHeap());
+#if SERIAL_DEBUG_ENABLED
+  if (loopPerfWindowStartMs == 0) loopPerfWindowStartMs = now;
+  loopPerfFrames++;
+  loopPerfTotalDt += dt;
+  if (dt > loopPerfMaxDt) loopPerfMaxDt = dt;
+  if (dt > frameInterval + 2) loopPerfLateFrames++;
+  if (now - loopPerfWindowStartMs >= 5000) {
+    uint32_t windowMs = now - loopPerfWindowStartMs;
+    float avgFps = loopPerfFrames * 1000.0f / windowMs;
+    uint32_t avgDt = loopPerfTotalDt / loopPerfFrames;
+    LOG_PRINTF("[LOOP] target=%ums avg_fps=%.1f avg_dt=%ums max_dt=%ums late=%u frames=%u heap=%u\n",
+               frameInterval, avgFps, avgDt, loopPerfMaxDt,
+               loopPerfLateFrames, loopPerfFrames, ESP.getFreeHeap());
+    loopPerfWindowStartMs = now;
+    loopPerfFrames = 0;
+    loopPerfTotalDt = 0;
+    loopPerfMaxDt = 0;
+    loopPerfLateFrames = 0;
   }
+#endif
 
   delay(1);
 }

@@ -22,6 +22,7 @@ struct RasterCapture {
 
 void test_sprite_scanline_matches_generic() {
   static RasterCapture generic;
+  TEST_ASSERT_TRUE(EyeDrawer::CoverageColor565(TFT_WHITE, 128) > 0x8410);
   static const EyeConfig cases[] = {
     {0, 0, 50, 50, 0, 0, 10, 10},
     {-4, 0, 25, 50, 0.3f, 0, 2, 15},
@@ -38,10 +39,13 @@ void test_sprite_scanline_matches_generic() {
     sprite.fillSprite(TFT_BLACK);
     EyeDrawer::RasterizePolygon(generic, points, count, TFT_WHITE);
     EyeDrawer::RasterizeSprite(sprite, points, count, TFT_WHITE);
-    TEST_ASSERT_EQUAL_UINT8_ARRAY(
-      (const uint8_t*)generic.pixels,
-      (const uint8_t*)sprite.getPointer(),
-      sizeof(generic.pixels));
+    const uint16_t* stored = static_cast<const uint16_t*>(sprite.getPointer());
+    for (int i = 0; i < RasterCapture::kWidth * RasterCapture::kHeight; i++) {
+      const uint16_t expected = generic.pixels[i];
+      const uint16_t storedExpected =
+          (uint16_t)((expected >> 8) | (expected << 8));
+      TEST_ASSERT_EQUAL_HEX16(storedExpected, stored[i]);
+    }
   }
 }
 
@@ -53,6 +57,20 @@ void test_boundary_generates_closed_polygon() {
   TEST_ASSERT_GREATER_OR_EQUAL(3, count);
   TEST_ASSERT_EQUAL(25, count);
   TEST_ASSERT_LESS_OR_EQUAL(MAX_POLY_PTS, count);
+
+  // A compressed one-sided rounded eye can occur during gaze scaling. Its
+  // arc must stay within the final width and height instead of folding over.
+  EyeConfig compressed = {0, 0, 5, 20, 0, 0, 12, 0};
+  count = EyeDrawer::GenerateBoundary(&compressed, 0, 0, points,
+                                      MAX_POLY_PTS);
+  TEST_ASSERT_EQUAL(15, count);
+  TEST_ASSERT_TRUE(points[6].x <= points[7].x);
+  for (int i = 0; i < count; i++) {
+    TEST_ASSERT_TRUE(points[i].x >= -10.001f);
+    TEST_ASSERT_TRUE(points[i].x <= 10.001f);
+    TEST_ASSERT_TRUE(points[i].y >= -2.501f);
+    TEST_ASSERT_TRUE(points[i].y <= 2.501f);
+  }
 }
 
 void test_boundary_handles_null_config() {

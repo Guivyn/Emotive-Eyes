@@ -19,7 +19,7 @@ class LookAssistant {
 public:
   explicit LookAssistant(Face& face);
 
-  void LookAt(float x, float y);
+  void LookAt(float x, float y, unsigned long durationMs = 200);
   void Update();
   void SetIntervalRange(unsigned long minMs, unsigned long maxMs);
 
@@ -28,6 +28,11 @@ private:
   AsyncTimer Timer;
   unsigned long _minInterval;
   unsigned long _maxInterval;
+  float _gazeX;
+  float _gazeY;
+  bool _returnToCenter;
+  bool _burstFollowup;
+  eEmotions _lastEmotion;
 };
 
 class BlinkAssistant {
@@ -71,6 +76,7 @@ public:
   void GoTo_Coquette();
 
 private:
+  void SetCurrentEmotion(eEmotions emotion);
   Face& _face;
 };
 
@@ -122,6 +128,7 @@ public:
   void UpdateTouch();
   void GoToSleep();
   void WakeFromSleep();
+  void CancelCelebration();
   bool IsSleeping() const { return _sleeping; }
   bool SetCalibration(int32_t offset, int32_t range);
   int32_t GetCalOffset() const { return _calOffset; }
@@ -135,9 +142,19 @@ private:
   int16_t RawToScreenY(uint16_t rawX, uint16_t rawY) const;
 
   bool _touchPressed;
+  uint8_t _touchPressSamples;
+  uint8_t _touchReleaseSamples;
+  uint16_t _touchCandidateX;
+  uint16_t _touchCandidateY;
   bool _sleeping;
   bool _sleepRequested;
-  bool _zzzDirty;
+  bool _sleepIndicatorDirty;
+  bool _hasPresentedFrame;
+  bool _lastDrawBoundsValid;
+  int16_t _lastDrawLeft;
+  int16_t _lastDrawTop;
+  int16_t _lastDrawRight;
+  int16_t _lastDrawBottom;
   unsigned long _sleepRequestedAt;
   uint8_t _tapCount;
   bool _touchStartValid;
@@ -155,6 +172,14 @@ private:
   uint8_t _yawnState;
   unsigned long _yawnEndMs;
   unsigned long _nextYawnMs;
+  bool _upSwipePending;
+  unsigned long _lastUpSwipeMs;
+  bool _celebrationActive;
+  uint8_t _celebrationStage;
+  unsigned long _celebrationStageStartedAt;
+  eEmotions _celebrationReturnEmotion;
+  void StartCelebration();
+  void UpdateCelebration(unsigned long now);
   enum class RenderMode : uint8_t {
     NONE,
     FULL_FRAME,

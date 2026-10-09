@@ -19,8 +19,11 @@ jobs:
       - name: Install PlatformIO Core
         run: pip install platformio==6.1.19
 
-      - name: Build firmware
-        run: pio run -e esp32dev
+      - name: Build the three firmware profiles
+        run: |
+          pio run -e esp32dev_always_on
+          pio run -e esp32dev_battery
+          pio run -e esp32dev_expression_test
 
       - name: Run host unit tests
         run: pio test -e native

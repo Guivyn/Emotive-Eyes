@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="500" viewBox="0 0 1200 500" role="img" aria-labelledby="title desc">
+  <title id="title">Emotive Eyes 2.0.0</title>
+  <desc id="desc">A warm white ESP32 display with two procedural navy eyes, beside the project name and release version.</desc>
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffaf2"/>
+      <stop offset="1" stop-color="#f2eee5"/>
+    </linearGradient>
+    <linearGradient id="bezel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#233844"/>
+      <stop offset="1" stop-color="#101f29"/>
+    </linearGradient>
+    <linearGradient id="display" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff8ee"/>
+      <stop offset="1" stop-color="#efe9df"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#182a33" flood-opacity=".15"/>
+    </filter>
+  </defs>
+
+  <rect x="1" y="1" width="1198" height="498" rx="34" fill="url(#paper)" stroke="#ded8ce" stroke-width="2"/>
+  <circle cx="58" cy="66" r="5" fill="#cf7658"/>
+  <text x="78" y="74" fill="#4e6268" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" letter-spacing="3">ESP32 · TOUCH TFT</text>
+
+  <text x="58" y="174" fill="#152a35" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="800" letter-spacing="-2">EMOTIVE</text>
+  <text x="58" y="257" fill="#152a35" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="800" letter-spacing="-2">EYES</text>
+  <text x="63" y="310" fill="#52676d" font-family="Arial, Helvetica, sans-serif" font-size="31" font-weight="500">Procedural expressions, made live.</text>
+
+  <g transform="translate(60 356)">
+    <rect width="190" height="54" rx="27" fill="#17323d"/>
+    <text x="95" y="35" text-anchor="middle" fill="#fff8ee" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" letter-spacing="1">VERSION 2.0.0</text>
+  </g>
+  <g fill="#4b6066" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="0.8">
+    <text x="64" y="455">19 EXPRESSIONS</text>
+    <circle cx="236" cy="449" r="3" fill="#cf7658"/>
+    <text x="255" y="455">8-SAMPLE EDGES</text>
+    <circle cx="429" cy="449" r="3" fill="#cf7658"/>
+    <text x="448" y="455">3 FIRMWARES</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="690" y="48" width="450" height="408" rx="42" fill="url(#bezel)"/>
+    <rect x="706" y="64" width="418" height="376" rx="29" fill="url(#display)"/>
+    <path d="M748 237 C748 196 781 171 825 171 C869 171 899 197 899 237 L899 248 C899 260 890 269 878 269 L769 269 C757 269 748 260 748 248 Z" fill="#17323d"/>
+    <path d="M931 237 C931 196 961 171 1005 171 C1049 171 1082 196 1082 237 L1082 248 C1082 260 1073 269 1061 269 L952 269 C940 269 931 260 931 248 Z" fill="#17323d"/>
+    <path d="M764 230 C771 203 794 188 825 188 C855 188 877 202 884 228" fill="none" stroke="#294c56" stroke-width="4" stroke-linecap="round" opacity=".48"/>
+    <path d="M947 228 C954 202 976 188 1005 188 C1037 188 1059 203 1066 230" fill="none" stroke="#294c56" stroke-width="4" stroke-linecap="round" opacity=".48"/>
+    <circle cx="915" cy="87" r="3" fill="#667a7c" opacity=".8"/>
+  </g>
+</svg>

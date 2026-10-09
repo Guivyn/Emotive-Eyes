@@ -5,7 +5,9 @@
 
 // Build/display constants shared by the renderer, power manager and main.
 static constexpr uint16_t EYE_COLOR = TFT_WHITE;
-static constexpr uint16_t BG_COLOR = TFT_BLACK;
+// INVON inverts displayed colors and TFT_BGR swaps red/blue; compensate both
+// so this renders as a pale warm white (approximately #FFF3E6).
+static constexpr uint16_t BG_COLOR = 0x1860;
 static constexpr uint16_t SCREEN_WIDTH = 320;
 static constexpr uint16_t SCREEN_HEIGHT = 240;
 // Render the complete display into one buffer when the heap can provide it.
@@ -14,15 +16,34 @@ static constexpr uint16_t SCREEN_HEIGHT = 240;
 static constexpr uint16_t FRAME_SPRITE_WIDTH = SCREEN_WIDTH;
 static constexpr uint16_t FRAME_SPRITE_HEIGHT = SCREEN_HEIGHT;
 static constexpr uint16_t FRAME_TILE_WIDTH = SCREEN_WIDTH / 2;
-static constexpr uint32_t FRAME_INTERVAL_ACTIVE_MS = 25; // 40 FPS target
-static constexpr uint32_t FRAME_INTERVAL_RELAX_MS = 33;  // 30 FPS target
-static constexpr uint32_t FRAME_INTERVAL_IDLE_MS = 41;   // ~24 FPS target
+#ifndef POWER_ACTIVE_FRAME_INTERVAL_MS
+  #if defined(PERF_TARGET_60FPS)
+    #define POWER_ACTIVE_FRAME_INTERVAL_MS 16
+  #elif defined(PERF_TARGET_50FPS)
+    #define POWER_ACTIVE_FRAME_INTERVAL_MS 20
+  #elif defined(PERF_TARGET_45FPS)
+    #define POWER_ACTIVE_FRAME_INTERVAL_MS 22
+  #else
+    #define POWER_ACTIVE_FRAME_INTERVAL_MS 25
+  #endif
+#endif
+#ifndef POWER_RELAX_FRAME_INTERVAL_MS
+  #define POWER_RELAX_FRAME_INTERVAL_MS 25
+#endif
+#ifndef POWER_IDLE_FRAME_INTERVAL_MS
+  #define POWER_IDLE_FRAME_INTERVAL_MS 33
+#endif
+static constexpr uint32_t FRAME_INTERVAL_ACTIVE_MS = POWER_ACTIVE_FRAME_INTERVAL_MS;
+static constexpr uint32_t FRAME_INTERVAL_RELAX_MS = POWER_RELAX_FRAME_INTERVAL_MS;
+static constexpr uint32_t FRAME_INTERVAL_IDLE_MS = POWER_IDLE_FRAME_INTERVAL_MS;
 static constexpr uint32_t SLEEP_POLL_INTERVAL_MS = 50;
 static constexpr uint8_t EYES_FRAME_MS_MIN = FRAME_INTERVAL_ACTIVE_MS;
 static constexpr unsigned long STARTUP_TFT_SETTLE_MS = 20;
 static constexpr unsigned long STARTUP_FACE_WAKE_MS = 500;
 
-static const uint16_t TOUCH_PRESSURE_THRESHOLD = 350;
+static const uint16_t TOUCH_PRESSURE_THRESHOLD = 600;
+static const uint16_t TOUCH_PRESSURE_RELEASE_THRESHOLD = 400;
+static const uint8_t TOUCH_STABLE_SAMPLES = 2;
 static const uint8_t TAP_COUNT_FOR_ANGER = 3;
 static const unsigned long TAP_WINDOW_MS = 1500;
 static const unsigned long DOUBLE_TAP_WINDOW_MS = 300;

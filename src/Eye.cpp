@@ -174,20 +174,27 @@ void EyeBlink::Apply(float t) {
 
 int EyeDrawer::GenerateBoundary(const EyeConfig* cfg, float cx, float cy,
                                 PolygonPoint* pts, int maxPts) {
-  if (!cfg || maxPts < 3) return 0;
+  if (!cfg || maxPts < 3 || cfg->Width <= 0 || cfg->Height <= 0) return 0;
 
-  float rT = (float)cfg->Radius_Top;
-  float rB = (float)cfg->Radius_Bottom;
+  float rT = cfg->Radius_Top > 0 ? (float)cfg->Radius_Top : 0.0f;
+  float rB = cfg->Radius_Bottom > 0 ? (float)cfg->Radius_Bottom : 0.0f;
   float dYT = cfg->Height * cfg->Slope_Top * 0.5f;
   float dYB = cfg->Height * cfg->Slope_Bottom * 0.5f;
-  float tH = cfg->Height + dYT - dYB;
+  const float maxRadiusX = (float)cfg->Width * 0.5f;
+  if (rT > maxRadiusX) rT = maxRadiusX;
+  if (rB > maxRadiusX) rB = maxRadiusX;
 
-  if (rB > 0 && rT > 0 && tH > 1.0f && tH - 1.0f < (float)(rB + rT)) {
-    float sR = (float)(rB + rT);
-    if (sR > 0.0f) {
-      rT = (float)cfg->Radius_Top * (tH - 1.0f) / sR;
-      rB = (float)cfg->Radius_Bottom * (tH - 1.0f) / sR;
-    }
+  // Look transformations can reduce Height without changing the stored
+  // corner radii. Keep the two corner arcs inside both sloped side edges,
+  // including presets where only one of Radius_Top/Radius_Bottom is nonzero.
+  float availableRadiusY =
+      (float)cfg->Height - fabsf(dYT - dYB) - 1.0f;
+  if (availableRadiusY < 0.0f) availableRadiusY = 0.0f;
+  const float radiusSum = rT + rB;
+  if (radiusSum > availableRadiusY && radiusSum > 0.0f) {
+    const float scale = availableRadiusY / radiusSum;
+    rT *= scale;
+    rB *= scale;
   }
 
   float TLx = cx + cfg->OffsetX - cfg->Width / 2.0f + rT;

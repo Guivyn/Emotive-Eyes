@@ -33,7 +33,10 @@ public:
 protected:
   float Calculate(unsigned long elapsedMillis) override {
     if (elapsedMillis >= Interval) return 1.0f;
-    return static_cast<float>(elapsedMillis) / Interval;
+    // Smoothstep eases in and out while keeping a monotonic, frame-rate
+    // independent transition without overshoot.
+    float t = static_cast<float>(elapsedMillis) / Interval;
+    return t * t * (3.0f - 2.0f * t);
   }
 };
 

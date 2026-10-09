@@ -2,6 +2,7 @@
 #include "Face.h"
 
 void FacePower_EnterRelax(Face& face) {
+  face.CancelCelebration();
   face.RandomBehavior = false;
   face.RandomLook = true;
   face.RandomBlink = true;
@@ -12,6 +13,7 @@ void FacePower_EnterRelax(Face& face) {
 }
 
 void FacePower_EnterIdle(Face& face) {
+  face.CancelCelebration();
   face.RandomBehavior = false;
   face.RandomLook = false;
   face.RandomBlink = false;
@@ -26,6 +28,7 @@ void FacePower_EnterIdle(Face& face) {
 }
 
 void FacePower_EnterSleep(Face& face) {
+  face.CancelCelebration();
   face.RandomBehavior = false;
   face.RandomLook = false;
   face.RandomBlink = false;

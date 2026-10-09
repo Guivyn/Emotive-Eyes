@@ -1,6 +1,7 @@
 #include "Face.h"
 #include "CalibrationCodec.h"
 #include "Log.h"
+#include <math.h>
 #include <LittleFS.h>
 #if defined(ESP32)
   #include "esp_heap_caps.h"
@@ -8,32 +9,38 @@
 
 extern TFT_eSPI tft;
 
-static const EyeConfig Preset_Normal = {0, 0, 50, 50, 0, 0, 10, 10};
-static const EyeConfig Preset_Happy = {0, 0, 12, 50, 0, 0, 12, 0};
-static const EyeConfig Preset_Glee = {0, 0, 10, 50, 0, 0, 10, 0};
-static const EyeConfig Preset_Sad = {0, 0, 19, 50, -0.5f, 0, 1, 12};
-static const EyeConfig Preset_Worried = {0, 0, 31, 50, -0.1f, 0, 8, 12};
-static const EyeConfig Preset_Worried_Alt = {0, 0, 44, 50, -0.2f, 0, 8, 12};
-static const EyeConfig Preset_Focused = {0, 0, 18, 50, 0.2f, 0, 4, 1};
-static const EyeConfig Preset_Annoyed = {0, 0, 15, 50, 0, 0, 0, 12};
-static const EyeConfig Preset_Annoyed_Alt = {0, 0, 6, 50, 0, 0, 0, 5};
-static const EyeConfig Preset_Surprised = {-2, 0, 56, 56, 0, 0, 20, 20};
-static const EyeConfig Preset_Skeptic = {0, 0, 50, 50, 0, 0, 12, 12};
-static const EyeConfig Preset_Skeptic_Alt = {0, -8, 32, 50, 0.3f, 0, 1, 12};
-static const EyeConfig Preset_Frustrated = {4, -6, 15, 50, 0, 0, 0, 12};
-static const EyeConfig Preset_Unimpressed = {4, 0, 15, 50, 0, 0, 1, 12};
-static const EyeConfig Preset_Unimpressed_Alt = {4, -4, 28, 50, 0, 0, 1, 20};
-static const EyeConfig Preset_Sleepy = {0, -2, 18, 50, -0.5f, -0.5f, 4, 4};
-static const EyeConfig Preset_Sleepy_Alt = {0, -2, 10, 50, -0.5f, -0.5f, 4, 4};
-static const EyeConfig Preset_Suspicious = {0, 0, 28, 50, 0, 0, 10, 4};
-static const EyeConfig Preset_Suspicious_Alt = {0, -4, 20, 50, 0.2f, 0, 8, 4};
-static const EyeConfig Preset_Squint = {-12, -4, 44, 44, 0, 0, 10, 10};
-static const EyeConfig Preset_Squint_Alt = {6, 0, 25, 25, 0, 0, 6, 6};
-static const EyeConfig Preset_Angry = {-4, 0, 25, 50, 0.3f, 0, 2, 15};
-static const EyeConfig Preset_Furious = {-2, 0, 38, 50, 0.4f, 0, 2, 10};
-static const EyeConfig Preset_Scared = {-4, 0, 50, 50, -0.1f, 0, 15, 10};
-static const EyeConfig Preset_Awe = {2, 0, 44, 56, -0.1f, 0.1f, 15, 15};
-static const EyeConfig Preset_Coquette = {0, -6, 20, 44, 0.25f, -0.25f, 10, 8};
+static const EyeConfig Preset_Normal = {0, 0, 60, 60, 0, 0, 12, 12};
+static const EyeConfig Preset_Happy = {0, 0, 14, 60, 0, 0, 14, 0};
+static const EyeConfig Preset_Glee = {0, 0, 12, 60, 0, 0, 12, 0};
+static const EyeConfig Preset_Sad = {0, 0, 23, 60, -0.5f, 0, 1, 14};
+static const EyeConfig Preset_Worried = {0, 0, 37, 60, -0.1f, 0, 10, 14};
+static const EyeConfig Preset_Worried_Alt = {0, 0, 53, 60, -0.2f, 0, 10, 14};
+static const EyeConfig Preset_Focused = {0, 0, 22, 60, 0.2f, 0, 5, 1};
+static const EyeConfig Preset_Annoyed = {0, 0, 18, 60, 0, 0, 0, 14};
+static const EyeConfig Preset_Annoyed_Alt = {0, 0, 7, 60, 0, 0, 0, 6};
+static const EyeConfig Preset_Surprised = {-2, 0, 67, 67, 0, 0, 24, 24};
+static const EyeConfig Preset_Skeptic = {0, 0, 60, 60, 0, 0, 14, 14};
+static const EyeConfig Preset_Skeptic_Alt = {0, -8, 38, 60, 0.3f, 0, 1, 14};
+static const EyeConfig Preset_Frustrated = {4, -6, 18, 60, 0, 0, 0, 14};
+static const EyeConfig Preset_Unimpressed = {4, 0, 18, 60, 0, 0, 1, 14};
+static const EyeConfig Preset_Unimpressed_Alt = {4, -4, 34, 60, 0, 0, 1, 24};
+static const EyeConfig Preset_Sleepy = {0, -2, 22, 60, -0.5f, -0.5f, 5, 5};
+static const EyeConfig Preset_Sleepy_Alt = {0, -2, 12, 60, -0.5f, -0.5f, 5, 5};
+static const EyeConfig Preset_Suspicious = {0, 0, 34, 60, 0, 0, 12, 5};
+static const EyeConfig Preset_Suspicious_Alt = {0, -4, 24, 60, 0.2f, 0, 10, 5};
+static const EyeConfig Preset_Squint = {-12, -4, 53, 53, 0, 0, 12, 12};
+static const EyeConfig Preset_Squint_Alt = {6, 0, 30, 30, 0, 0, 7, 7};
+static const EyeConfig Preset_Angry = {-4, 0, 30, 60, 0.3f, 0, 2, 18};
+static const EyeConfig Preset_Furious = {-2, 0, 46, 60, 0.4f, 0, 2, 12};
+static const EyeConfig Preset_Scared = {-4, 0, 60, 60, -0.1f, 0, 18, 12};
+static const EyeConfig Preset_Awe = {2, 0, 53, 67, -0.1f, 0.1f, 18, 18};
+static const EyeConfig Preset_Coquette = {0, -6, 24, 53, 0.25f, -0.25f, 12, 10};
+
+static const unsigned long DOUBLE_UP_SWIPE_WINDOW_MS = 700;
+static const unsigned long CELEBRATION_GLEE_MS = 600;
+static const unsigned long CELEBRATION_AWE_MS = 600;
+static const unsigned long CELEBRATION_HAPPY_MS = 900;
+static const unsigned long RANDOM_EMOTION_INTERVAL_MS = 6000;
 
 namespace {
 
@@ -52,36 +59,156 @@ bool LittleFsHasCalibrationFile(const char* suffix) {
   return found;
 }
 
+float RandomCenteredUnit() {
+  const long sum = random(-1000L, 1001L) + random(-1000L, 1001L);
+  return sum / 2000.0f;
+}
+
+bool IsEyeBlinkingOrChangingExpression(const Eye& eye) {
+  return eye.Transition.Active ||
+      eye.BlinkTransformation.Animation.GetElapsed() <
+          eye.BlinkTransformation.Animation.Interval;
+}
+
+struct GazeActivityProfile {
+  float intervalScale;
+  float movementScale;
+  uint8_t glanceChancePercent;
+};
+
+GazeActivityProfile GetGazeActivityProfile(eEmotions emotion) {
+  switch (emotion) {
+    case Sleepy:      return {1.80f, 0.45f, 3};
+    case Sad:         return {1.45f, 0.70f, 7};
+    case Unimpressed: return {1.60f, 0.60f, 5};
+    case Focused:
+    case Squint:      return {1.25f, 0.75f, 8};
+    case Happy:
+    case Glee:
+    case Coquette:    return {0.70f, 1.10f, 28};
+    case Surprised:
+    case Scared:
+    case Awe:         return {0.62f, 1.05f, 35};
+    case Worried:
+    case Suspicious:
+    case Skeptic:     return {0.82f, 0.95f, 26};
+    case Angry:
+    case Furious:     return {0.95f, 0.82f, 20};
+    case Annoyed:
+    case Frustrated:  return {0.90f, 0.68f, 12};
+    case Normal:
+    default:          return {1.00f, 1.00f, 15};
+  }
+}
+
+unsigned long ScaleGazeInterval(unsigned long intervalMs, float scale) {
+  return static_cast<unsigned long>(intervalMs * scale);
+}
+
 } // namespace
 
 LookAssistant::LookAssistant(Face& face)
-  : _face(face), Timer(2500), _minInterval(1500), _maxInterval(3500) {
+  : _face(face), Timer(2500), _minInterval(1500), _maxInterval(3500),
+    _gazeX(0.0f), _gazeY(0.0f), _returnToCenter(false),
+    _burstFollowup(false), _lastEmotion(Normal) {
   Timer.Start();
 }
 
-void LookAssistant::LookAt(float x, float y) {
+void LookAssistant::LookAt(float x, float y, unsigned long durationMs) {
   Transformation t;
   float mx = -20 * x;
   float my = 20 * y;
-  float sy = (1.0f - x * 0.2f) * (1.0f - (y > 0 ? y : -y) * 0.4f);
+  const float absX = x < 0.0f ? -x : x;
+  const float absY = y < 0.0f ? -y : y;
+  float sy = 1.0f - absX * 0.05f - absY * 0.08f;
+  if (sy < 0.90f) sy = 0.90f;
   t.MoveX = mx;
   t.MoveY = my;
   t.ScaleX = 1.0f;
   t.ScaleY = sy;
+  _gazeX = x;
+  _gazeY = y;
   _face.RightEye.Transformation.SetDestin(t);
   _face.LeftEye.Transformation.SetDestin(t);
+  _face.RightEye.Transformation.Animation.Interval = durationMs;
+  _face.LeftEye.Transformation.Animation.Interval = durationMs;
   _face.RightEye.Transformation.Animation.Restart();
   _face.LeftEye.Transformation.Animation.Restart();
 }
 
 void LookAssistant::Update() {
+  const eEmotions emotion = _face.Behavior.CurrentEmotion;
+  const GazeActivityProfile activity = GetGazeActivityProfile(emotion);
+  if (emotion != _lastEmotion) {
+    _lastEmotion = emotion;
+    // Keep an in-progress glance/settle pair intact. Otherwise, adopt the
+    // new expression's cadence from this point onward.
+    if (!_returnToCenter && !_burstFollowup) {
+      const unsigned long baseInterval = _minInterval +
+          random(_maxInterval - _minInterval + 1);
+      Timer.SetIntervalMillis(
+          ScaleGazeInterval(baseInterval, activity.intervalScale));
+      Timer.Reset();
+      return;
+    }
+  }
+
   Timer.Update();
   if (!Timer.IsExpired()) return;
+  if (IsEyeBlinkingOrChangingExpression(_face.LeftEye) ||
+      IsEyeBlinkingOrChangingExpression(_face.RightEye)) {
+    // Keep the pending gaze event and retry shortly after the eyes settle.
+    Timer.SetIntervalMillis(80);
+    Timer.Reset();
+    return;
+  }
 
-  float x = random(-100, 101) / 100.0f;
-  float y = random(-100, 101) / 100.0f;
-  LookAt(x, y);
-  Timer.SetIntervalMillis(_minInterval + random(_maxInterval - _minInterval + 1));
+  const bool returningToCenter = _returnToCenter;
+  const bool burstFollowup = _burstFollowup;
+  _burstFollowup = false;
+
+  // Small, center-biased correlated shifts are the normal motion. A rare
+  // wider glance is followed by a deliberate return to center.
+  if (returningToCenter) {
+    _returnToCenter = false;
+    LookAt(0.0f, 0.0f, random(140L, 201L));
+  } else if (burstFollowup) {
+    const float x = (_gazeX * 0.55f + RandomCenteredUnit() * 0.05f) *
+        activity.movementScale;
+    const float y = (_gazeY * 0.55f + RandomCenteredUnit() * 0.05f) *
+        activity.movementScale;
+    LookAt(x, y, random(200L, 281L));
+  } else if (random(0L, 100L) < activity.glanceChancePercent) {
+    const float angle = random(0L, 6284L) / 1000.0f;
+    const float radius = random(350L, 501L) / 1000.0f *
+        activity.movementScale;
+    // Larger saccade-like glances move decisively, then settle before return.
+    LookAt(cosf(angle) * radius, sinf(angle) * radius,
+           random(110L, 171L));
+    _returnToCenter = true;
+  } else {
+    const float x = (_gazeX * 0.35f + RandomCenteredUnit() * 0.13f) *
+        activity.movementScale;
+    const float y = (_gazeY * 0.35f + RandomCenteredUnit() * 0.13f) *
+        activity.movementScale;
+    // Tiny fixation drift stays slower and less abrupt than a glance.
+    LookAt(x, y, random(240L, 361L));
+    _burstFollowup = random(0L, 4L) == 0;
+  }
+
+  unsigned long nextInterval =
+      _minInterval + random(_maxInterval - _minInterval + 1);
+  if (_returnToCenter) {
+    // Hold a wider glance for a short, varied fixation before returning.
+    nextInterval = random(700L, 1601L);
+  } else if (_burstFollowup) {
+    // Occasionally add one quick micro-correction, then resume a long hold.
+    nextInterval = ScaleGazeInterval(random(450L, 1001L),
+                                     activity.intervalScale);
+  } else {
+    nextInterval = ScaleGazeInterval(nextInterval, activity.intervalScale);
+  }
+  Timer.SetIntervalMillis(nextInterval);
   Timer.Reset();
 }
 
@@ -116,6 +243,10 @@ void BlinkAssistant::SetIntervalRange(unsigned long minMs, unsigned long maxMs) 
 
 FaceExpression::FaceExpression(Face& face) : _face(face) {}
 
+void FaceExpression::SetCurrentEmotion(eEmotions emotion) {
+  _face.Behavior.CurrentEmotion = emotion;
+}
+
 void FaceExpression::ClearVariations() {
   _face.RightEye.Variation1.StartFadeOut();
   _face.RightEye.Variation2.StartFadeOut();
@@ -126,6 +257,7 @@ void FaceExpression::ClearVariations() {
 }
 
 void FaceExpression::GoTo_Normal() {
+  SetCurrentEmotion(Normal);
   ClearVariations();
   _face.RightEye.Variation1.Values.Height = 3;
   _face.RightEye.Variation2.Values.Width = 1;
@@ -138,6 +270,7 @@ void FaceExpression::GoTo_Normal() {
 }
 
 void FaceExpression::GoTo_Angry() {
+  SetCurrentEmotion(Angry);
   ClearVariations();
   _face.RightEye.Variation1.Values.OffsetY = 2;
   _face.LeftEye.Variation1.Values.OffsetY = 2;
@@ -148,6 +281,7 @@ void FaceExpression::GoTo_Angry() {
 }
 
 void FaceExpression::GoTo_Glee() {
+  SetCurrentEmotion(Glee);
   ClearVariations();
   _face.RightEye.Variation1.Values.OffsetY = 5;
   _face.LeftEye.Variation1.Values.OffsetY = 5;
@@ -158,72 +292,84 @@ void FaceExpression::GoTo_Glee() {
 }
 
 void FaceExpression::GoTo_Happy() {
+  SetCurrentEmotion(Happy);
   ClearVariations();
   _face.RightEye.TransitionTo(Preset_Happy);
   _face.LeftEye.TransitionTo(Preset_Happy);
 }
 
 void FaceExpression::GoTo_Sad() {
+  SetCurrentEmotion(Sad);
   ClearVariations();
   _face.RightEye.TransitionTo(Preset_Sad);
   _face.LeftEye.TransitionTo(Preset_Sad);
 }
 
 void FaceExpression::GoTo_Worried() {
+  SetCurrentEmotion(Worried);
   ClearVariations();
   _face.RightEye.TransitionTo(Preset_Worried);
   _face.LeftEye.TransitionTo(Preset_Worried_Alt);
 }
 
 void FaceExpression::GoTo_Focused() {
+  SetCurrentEmotion(Focused);
   ClearVariations();
   _face.RightEye.TransitionTo(Preset_Focused);
   _face.LeftEye.TransitionTo(Preset_Focused);
 }
 
 void FaceExpression::GoTo_Annoyed() {
+  SetCurrentEmotion(Annoyed);
   ClearVariations();
   _face.RightEye.TransitionTo(Preset_Annoyed);
   _face.LeftEye.TransitionTo(Preset_Annoyed_Alt);
 }
 
 void FaceExpression::GoTo_Surprised() {
+  SetCurrentEmotion(Surprised);
   ClearVariations();
   _face.RightEye.TransitionTo(Preset_Surprised);
   _face.LeftEye.TransitionTo(Preset_Surprised);
 }
 
 void FaceExpression::GoTo_Skeptic() {
+  SetCurrentEmotion(Skeptic);
   ClearVariations();
   _face.RightEye.TransitionTo(Preset_Skeptic);
   _face.LeftEye.TransitionTo(Preset_Skeptic_Alt);
 }
 
 void FaceExpression::GoTo_Frustrated() {
+  SetCurrentEmotion(Frustrated);
   ClearVariations();
   _face.RightEye.TransitionTo(Preset_Frustrated);
   _face.LeftEye.TransitionTo(Preset_Frustrated);
 }
 
 void FaceExpression::GoTo_Unimpressed() {
+  SetCurrentEmotion(Unimpressed);
   ClearVariations();
   _face.RightEye.TransitionTo(Preset_Unimpressed);
   _face.LeftEye.TransitionTo(Preset_Unimpressed_Alt);
 }
 
 void FaceExpression::GoTo_Sleepy() {
+  SetCurrentEmotion(Sleepy);
   ClearVariations();
   _face.RightEye.TransitionTo(Preset_Sleepy);
   _face.LeftEye.TransitionTo(Preset_Sleepy_Alt);
 }
 
 void FaceExpression::GoTo_Suspicious() {
+  SetCurrentEmotion(Suspicious);
   ClearVariations();
   _face.RightEye.TransitionTo(Preset_Suspicious);
   _face.LeftEye.TransitionTo(Preset_Suspicious_Alt);
 }
 
 void FaceExpression::GoTo_Squint() {
+  SetCurrentEmotion(Squint);
   ClearVariations();
   _face.LeftEye.Variation1.Values.OffsetX = 6;
   _face.LeftEye.Variation2.Values.OffsetY = 6;
@@ -232,24 +378,28 @@ void FaceExpression::GoTo_Squint() {
 }
 
 void FaceExpression::GoTo_Furious() {
+  SetCurrentEmotion(Furious);
   ClearVariations();
   _face.RightEye.TransitionTo(Preset_Furious);
   _face.LeftEye.TransitionTo(Preset_Furious);
 }
 
 void FaceExpression::GoTo_Scared() {
+  SetCurrentEmotion(Scared);
   ClearVariations();
   _face.RightEye.TransitionTo(Preset_Scared);
   _face.LeftEye.TransitionTo(Preset_Scared);
 }
 
 void FaceExpression::GoTo_Awe() {
+  SetCurrentEmotion(Awe);
   ClearVariations();
   _face.RightEye.TransitionTo(Preset_Awe);
   _face.LeftEye.TransitionTo(Preset_Awe);
 }
 
 void FaceExpression::GoTo_Coquette() {
+  SetCurrentEmotion(Coquette);
   ClearVariations();
   _face.RightEye.Variation1.Values.OffsetY = 3;
   _face.LeftEye.Variation1.Values.OffsetY = 3;
@@ -260,7 +410,7 @@ void FaceExpression::GoTo_Coquette() {
 }
 
 FaceBehavior::FaceBehavior(Face& face)
-  : Emotions{}, CurrentEmotion(Normal), Timer(4000), _face(face) {
+  : Emotions{}, CurrentEmotion(Normal), Timer(RANDOM_EMOTION_INTERVAL_MS), _face(face) {
   Timer.Start();
   Clear();
   Emotions[Normal] = 4;
@@ -355,7 +505,7 @@ Face::Face(uint16_t sw, uint16_t sh, uint16_t es)
   : EyeSize(es),
     CenterX(sw / 2),
     CenterY(sh / 2),
-    EyeInterDistance(12),
+    EyeInterDistance(15),
     LeftEye(),
     RightEye(),
     Blink(*this),
@@ -366,9 +516,19 @@ Face::Face(uint16_t sw, uint16_t sh, uint16_t es)
     RandomLook(false),
     RandomBlink(false),
     _touchPressed(false),
+    _touchPressSamples(0),
+    _touchReleaseSamples(0),
+    _touchCandidateX(0),
+    _touchCandidateY(0),
     _sleeping(false),
     _sleepRequested(false),
-    _zzzDirty(false),
+    _sleepIndicatorDirty(false),
+    _hasPresentedFrame(false),
+    _lastDrawBoundsValid(false),
+    _lastDrawLeft(0),
+    _lastDrawTop(0),
+    _lastDrawRight(0),
+    _lastDrawBottom(0),
     _sleepRequestedAt(0),
     _tapCount(0),
     _touchStartValid(false),
@@ -386,6 +546,12 @@ Face::Face(uint16_t sw, uint16_t sh, uint16_t es)
     _yawnState(0),
     _yawnEndMs(0),
     _nextYawnMs(0),
+    _upSwipePending(false),
+    _lastUpSwipeMs(0),
+    _celebrationActive(false),
+    _celebrationStage(0),
+    _celebrationStageStartedAt(0),
+    _celebrationReturnEmotion(Normal),
     sprite(&tft),
     spriteOk(false),
     _renderMode(RenderMode::NONE),
@@ -567,6 +733,8 @@ void Face::LookFront() {
 }
 
 void Face::GoToSleep() {
+  CancelCelebration();
+  _upSwipePending = false;
   _sleeping = true;
   RandomBehavior = false;
   RandomLook = false;
@@ -579,18 +747,21 @@ void Face::GoToSleep() {
   LeftEye.Variation1.Animation.SetTriangle(2400, 0);
   _sleepRequested = true;
   _sleepRequestedAt = millis();
-  _zzzDirty = true;
+  if (gPowerManager) gPowerManager->BeginSleepFade();
+  _sleepIndicatorDirty = true;
   LOG_PRINTLN("[TOUCH] Sleep mode on");
 }
 
 void Face::WakeFromSleep() {
+  CancelCelebration();
+  _upSwipePending = false;
   _sleeping = false;
   _sleepRequested = false;
-  _zzzDirty = true;
+  _sleepIndicatorDirty = true;
   RandomBehavior = true;
   RandomLook = true;
   RandomBlink = true;
-  Behavior.Timer.SetIntervalMillis(4000);
+  Behavior.Timer.SetIntervalMillis(RANDOM_EMOTION_INTERVAL_MS);
   Behavior.Timer.Reset();
   Behavior.GoToEmotion(Normal);
   LOG_PRINTLN("[TOUCH] Wake up");
@@ -609,6 +780,13 @@ void Face::Begin() {
 
 void Face::Update() {
   uint32_t now = millis();
+#if defined(PERF_CONTINUOUS_ANIMATION)
+  // The continuous benchmark supplies its own deterministic emotion cycle.
+  // Skip startup's automatic random-animation enable so the test stays repeatable.
+  RandomBehavior = false;
+  RandomLook = false;
+  RandomBlink = false;
+#else
   uint32_t elapsed = now - _bootTime;
   switch (_startupPhase) {
     case StartupPhase::BOOT:
@@ -633,12 +811,16 @@ void Face::Update() {
     case StartupPhase::RUNNING:
       break;
   }
+#endif
 
-  if (RandomBehavior) Behavior.Update();
-  if (RandomLook) Look.Update();
+  if (RandomBehavior && !_celebrationActive) Behavior.Update();
+  if (_celebrationActive) UpdateCelebration(now);
+  // Start any due blink first so the gaze assistant can defer this frame.
   if (RandomBlink) Blink.Update();
+  if (RandomLook) Look.Update();
 
-  if (gPowerManager && gPowerManager->GetState() == PowerState::RELAX) {
+  if (!_celebrationActive && gPowerManager &&
+      gPowerManager->GetState() == PowerState::RELAX) {
     if (_yawnState == 0) {
       if (_nextYawnMs == 0) {
         _nextYawnMs = now + 20000 + random(20000);
@@ -668,7 +850,7 @@ void Face::Update() {
 }
 
 bool Face::NeedsRedraw() const {
-  if (_zzzDirty) return true;
+  if (_sleepIndicatorDirty) return true;
   return LeftEye.NeedsRedraw() || RightEye.NeedsRedraw();
 }
 
@@ -694,35 +876,53 @@ void Face::UpdateTouch() {
   _lastTouchPollMs = now;
 
   uint16_t z = tft.getTouchRawZ();
-  bool pressed = z >= TOUCH_PRESSURE_THRESHOLD;
-  if (pressed && !_touchPressed) {
-    if (_sleeping) WakeFromSleep();
+  if (!_touchPressed) {
+    if (z < TOUCH_PRESSURE_THRESHOLD) {
+      _touchPressSamples = 0;
+      return;
+    }
+
     uint16_t rx = 0, ry = 0;
     tft.getTouchRaw(&rx, &ry);
+    if (_touchPressSamples == 0) {
+      _touchCandidateX = (uint16_t)RawToScreenX(rx, ry);
+      _touchCandidateY = (uint16_t)RawToScreenY(rx, ry);
+      _touchPressSamples = 1;
+      return;
+    }
+    if (_touchPressSamples < TOUCH_STABLE_SAMPLES) {
+      _touchPressSamples++;
+    }
+    if (_touchPressSamples < TOUCH_STABLE_SAMPLES) return;
+
+    _touchPressSamples = 0;
+    if (_celebrationActive) CancelCelebration();
+    if (_sleeping) WakeFromSleep();
     LOG_PRINTF("[TOUCH] press z=%u raw=%u,%u\n", z, rx, ry);
-    _touchStartX = _touchLastX = RawToScreenX(rx, ry);
-    _touchStartY = _touchLastY = RawToScreenY(rx, ry);
+    _touchStartX = _touchCandidateX;
+    _touchStartY = _touchCandidateY;
+    _touchLastX = (uint16_t)RawToScreenX(rx, ry);
+    _touchLastY = (uint16_t)RawToScreenY(rx, ry);
     _touchStartValid = true;
     if (gPowerManager) gPowerManager->NotifyInteraction();
-    Blink.Blink();
     _touchPressStartMs = now;
     _longPressHandled = false;
     _touchPressed = true;
-  } else if (pressed && _touchPressed) {
-    uint16_t rx = 0, ry = 0;
-    tft.getTouchRaw(&rx, &ry);
-    _touchLastX = RawToScreenX(rx, ry);
-    _touchLastY = RawToScreenY(rx, ry);
-    _touchStartValid = true;
+  } else if (z <= TOUCH_PRESSURE_RELEASE_THRESHOLD) {
+    if (_touchReleaseSamples < TOUCH_STABLE_SAMPLES) {
+      _touchReleaseSamples++;
+    }
+    if (_touchReleaseSamples < TOUCH_STABLE_SAMPLES) return;
+    _touchReleaseSamples = 0;
+    _touchPressed = false;
     if (!_longPressHandled && now - _touchPressStartMs >= LONG_PRESS_MS) {
       _longPressHandled = true;
+      _upSwipePending = false;
       _tapCount = 0;
       _doubleTapPendingUntil = 0;
       Behavior.GoToEmotion(Normal);
       LOG_PRINTLN("[TOUCH] Long press -> Normal");
     }
-  } else if (!pressed && _touchPressed) {
-    _touchPressed = false;
     if (_longPressHandled) {
       _longPressHandled = false;
       return;
@@ -740,6 +940,10 @@ void Face::UpdateTouch() {
       return;
     }
 
+    _upSwipePending = false;
+    // Wait until release confirms this is a tap. Starting touch feedback on
+    // press also animated horizontal brightness swipes.
+    Blink.Blink();
     _tapCount++;
     LOG_PRINTF("[TOUCH] Tap #%u\n", _tapCount);
     if (_tapCount >= TAP_COUNT_FOR_ANGER) {
@@ -751,69 +955,140 @@ void Face::UpdateTouch() {
       _doubleTapPendingUntil = now + DOUBLE_TAP_WINDOW_MS;
     }
     _tapWindowUntil = now + TAP_WINDOW_MS;
+  } else {
+    _touchReleaseSamples = 0;
+    if (z >= TOUCH_PRESSURE_THRESHOLD) {
+      uint16_t rx = 0, ry = 0;
+      tft.getTouchRaw(&rx, &ry);
+      _touchLastX = (uint16_t)RawToScreenX(rx, ry);
+      _touchLastY = (uint16_t)RawToScreenY(rx, ry);
+      _touchStartValid = true;
+    }
+    if (!_longPressHandled && now - _touchPressStartMs >= LONG_PRESS_MS) {
+      _longPressHandled = true;
+      _upSwipePending = false;
+      _tapCount = 0;
+      _doubleTapPendingUntil = 0;
+      Behavior.GoToEmotion(Normal);
+      LOG_PRINTLN("[TOUCH] Long press -> Normal");
+    }
   }
 }
 
 void Face::HandleSwipe(int32_t dx, int32_t dy) {
   LOG_PRINTF("[TOUCH] Swipe dx=%d dy=%d\n", dx, dy);
   if (abs(dx) > abs(dy)) {
-    LOG_PRINTLN("[TOUCH] Horizontal swipe ignored");
+    _upSwipePending = false;
+    if (!gPowerManager) return;
+    int16_t next = (int16_t)gPowerManager->GetBrightness() +
+                   (dx > 0 ? 10 : -10);
+    if (next < PowerManager::MIN_BRIGHTNESS_PERCENT) {
+      next = PowerManager::MIN_BRIGHTNESS_PERCENT;
+    } else if (next > PowerManager::MAX_BRIGHTNESS_PERCENT) {
+      next = PowerManager::MAX_BRIGHTNESS_PERCENT;
+    }
+    bool saved = gPowerManager->SetBrightness((uint8_t)next);
+    LOG_PRINTF("[TOUCH] Swipe %s -> brightness %u%% (%s)\n",
+               dx > 0 ? "right" : "left", (unsigned)next,
+               saved ? "saved" : "save failed");
     return;
   } else if (dy < 0) {
-    Behavior.GoToEmotion(Coquette);
-    LOG_PRINTLN("[TOUCH] Swipe up -> Coquette");
+    unsigned long now = millis();
+    if (_upSwipePending && now - _lastUpSwipeMs <= DOUBLE_UP_SWIPE_WINDOW_MS) {
+      _upSwipePending = false;
+      StartCelebration();
+      LOG_PRINTLN("[TOUCH] Double swipe up -> celebration");
+    } else {
+      _upSwipePending = true;
+      _lastUpSwipeMs = now;
+      Behavior.GoToEmotion(Coquette);
+      Behavior.Timer.Reset();
+      LOG_PRINTLN("[TOUCH] Swipe up -> Coquette; repeat within 700ms to celebrate");
+    }
   } else {
+    _upSwipePending = false;
     GoToSleep();
     LOG_PRINTLN("[TOUCH] Swipe down -> Sleepy");
   }
 }
 
-template<typename T>
-static void DrawCapsule(T& dpy, float x1, float y1, float x2, float y2,
-                        int radius, uint16_t color) {
-  int steps = abs(x2 - x1) > abs(y2 - y1)
-    ? abs(x2 - x1) : abs(y2 - y1);
-  if (steps < 1) steps = 1;
-  for (int i = 0; i <= steps; i++) {
-    float t = (float)i / steps;
-    dpy.fillCircle((int)(x1 + (x2 - x1) * t),
-                   (int)(y1 + (y2 - y1) * t), radius, color);
+void Face::StartCelebration() {
+  _celebrationReturnEmotion = Behavior.CurrentEmotion;
+  _celebrationActive = true;
+  _celebrationStage = 0;
+  _celebrationStageStartedAt = millis();
+  Behavior.Timer.Reset();
+  Behavior.GoToEmotion(Glee);
+}
+
+void Face::UpdateCelebration(unsigned long now) {
+  unsigned long stageDuration = 0;
+  switch (_celebrationStage) {
+    case 0: stageDuration = CELEBRATION_GLEE_MS; break;
+    case 1: stageDuration = CELEBRATION_AWE_MS; break;
+    case 2: stageDuration = CELEBRATION_HAPPY_MS; break;
+    default:
+      _celebrationActive = false;
+      Behavior.GoToEmotion(_celebrationReturnEmotion);
+      Behavior.Timer.Reset();
+      return;
+  }
+
+  if (now - _celebrationStageStartedAt < stageDuration) return;
+  _celebrationStageStartedAt = now;
+  if (_celebrationStage == 0) {
+    _celebrationStage = 1;
+    Behavior.GoToEmotion(Awe);
+  } else if (_celebrationStage == 1) {
+    _celebrationStage = 2;
+    Behavior.GoToEmotion(Happy);
+  } else {
+    _celebrationActive = false;
+    Behavior.GoToEmotion(_celebrationReturnEmotion);
+    Behavior.Timer.Reset();
+    LOG_PRINTLN("[TOUCH] Celebration complete");
   }
 }
 
-template<typename T>
-static void DrawZ(T& dpy, int16_t centerX, int16_t centerY,
-                  uint16_t color, float scale) {
-  float w = 14.0f * scale;
-  float h = 12.0f * scale;
-  // Keep the original glyph shape. The 45-degree layout is defined by the
-  // center points below, not by rotating or shearing the Z itself.
-  float skew = 4.0f * scale;
-  int radius = scale >= 1.4f ? 3 : 2;
-  float x = centerX - (w + skew) * 0.5f;
-  float y = centerY - h * 0.5f;
-  DrawCapsule(dpy, x + skew, y + radius, x + w + skew, y + radius,
-              radius, color);
-  DrawCapsule(dpy, x + skew, y + radius, x + w, y + h - radius,
-              radius, color);
-  DrawCapsule(dpy, x, y + h - radius, x + w, y + h - radius,
-              radius, color);
+void Face::CancelCelebration() {
+  _upSwipePending = false;
+  if (!_celebrationActive) return;
+  _celebrationActive = false;
+  Behavior.GoToEmotion(_celebrationReturnEmotion);
+  Behavior.Timer.Reset();
+  LOG_PRINTLN("[TOUCH] Celebration interrupted");
 }
 
-struct SleepZPlacement {
-  int16_t centerX;
-  int16_t centerY;
-  float scale;
-};
+template<typename T>
+static void DrawSleepSparkle(T& dpy, int16_t centerX, int16_t centerY,
+                             int16_t verticalRadius,
+                             int16_t horizontalRadius, uint16_t color) {
+  if (verticalRadius < 2 || horizontalRadius < 2) return;
 
-// (222,151) -> (254,183) -> (286,215): dx == dy == 32, so the
-// center-point guide line remains exactly 45 degrees. The largest Z stays
-// anchored at its previous center while the two smaller symbols move closer.
-static const SleepZPlacement SLEEP_Z_LAYOUT[] = {
-  {222, 151, 1.0f},
-  {254, 183, 1.4f},
-  {286, 215, 1.8f},
-};
+  dpy.fillTriangle(centerX, centerY - verticalRadius,
+                   centerX - 1, centerY,
+                   centerX + 1, centerY, color);
+  dpy.fillTriangle(centerX + horizontalRadius, centerY,
+                   centerX, centerY - 1,
+                   centerX, centerY + 1, color);
+  dpy.fillTriangle(centerX, centerY + verticalRadius,
+                   centerX + 1, centerY,
+                   centerX - 1, centerY, color);
+  dpy.fillTriangle(centerX - horizontalRadius, centerY,
+                   centerX, centerY + 1,
+                   centerX, centerY - 1, color);
+  dpy.fillRect(centerX - 1, centerY - 1, 3, 3, color);
+}
+
+// Use a thicker crescent and tapered four-point sparkles so the sleep mark
+// stays recognizable on the low-resolution panel without dominating the face.
+template<typename T>
+static void DrawSleepIndicator(T& dpy, int16_t offsetX = 0) {
+  dpy.fillCircle(269 - offsetX, 196, 13, EYE_COLOR);
+  dpy.fillCircle(278 - offsetX, 196, 10, BG_COLOR);
+  DrawSleepSparkle(dpy, 285 - offsetX, 184, 4, 3, EYE_COLOR);
+  DrawSleepSparkle(dpy, 288 - offsetX, 207, 3, 2, EYE_COLOR);
+}
 
 static bool XRangeIntersectsRegion(float centerX, float offsetX, float width,
                                    int16_t originX, uint16_t regionWidth) {
@@ -824,6 +1099,76 @@ static bool XRangeIntersectsRegion(float centerX, float offsetX, float width,
   return left <= regionRight && right >= originX;
 }
 
+struct DrawBounds {
+  int16_t left;
+  int16_t top;
+  int16_t right;
+  int16_t bottom;
+  bool valid;
+};
+
+static void IncludeDrawBounds(DrawBounds& bounds, int32_t left, int32_t top,
+                              int32_t right, int32_t bottom) {
+  if (right < 0 || bottom < 0 || left >= SCREEN_WIDTH ||
+      top >= SCREEN_HEIGHT) return;
+  if (left < 0) left = 0;
+  if (top < 0) top = 0;
+  if (right >= SCREEN_WIDTH) right = SCREEN_WIDTH - 1;
+  if (bottom >= SCREEN_HEIGHT) bottom = SCREEN_HEIGHT - 1;
+  if (left > right || top > bottom) return;
+
+  if (!bounds.valid) {
+    bounds.left = left;
+    bounds.top = top;
+    bounds.right = right;
+    bounds.bottom = bottom;
+    bounds.valid = true;
+    return;
+  }
+  if (left < bounds.left) bounds.left = left;
+  if (top < bounds.top) bounds.top = top;
+  if (right > bounds.right) bounds.right = right;
+  if (bottom > bounds.bottom) bounds.bottom = bottom;
+}
+
+static void IncludeEyeBounds(DrawBounds& bounds, const Eye& eye) {
+  const EyeConfig* cfg = eye.FinalConfig;
+  if (!cfg || cfg->Width <= 0 || cfg->Height <= 0) return;
+
+  const float centerX = eye.CenterX + cfg->OffsetX;
+  const float centerY = eye.CenterY + cfg->OffsetY;
+  const float halfWidth = cfg->Width * 0.5f + 2.0f;
+  const float topSlope = fabsf(cfg->Slope_Top) * cfg->Height * 0.5f;
+  const float bottomSlope = fabsf(cfg->Slope_Bottom) * cfg->Height * 0.5f;
+  const float maxSlope = topSlope > bottomSlope ? topSlope : bottomSlope;
+  const float halfHeight = cfg->Height * 0.5f + maxSlope + 2.0f;
+  IncludeDrawBounds(bounds,
+      (int32_t)floorf(centerX - halfWidth),
+      (int32_t)floorf(centerY - halfHeight),
+      (int32_t)ceilf(centerX + halfWidth),
+      (int32_t)ceilf(centerY + halfHeight));
+}
+
+static DrawBounds CurrentDrawBounds(const Eye& leftEye, const Eye& rightEye,
+                                   bool showSleepIndicator) {
+  DrawBounds bounds = {0, 0, -1, -1, false};
+  IncludeEyeBounds(bounds, leftEye);
+  IncludeEyeBounds(bounds, rightEye);
+  if (showSleepIndicator) {
+    // Encloses the crescent and both four-point sparkles, with one pixel of
+    // margin for drawing-library edge rounding.
+    IncludeDrawBounds(bounds, 255, 180, 291, 210);
+  }
+  return bounds;
+}
+
+static bool BoundsIntersectX(const DrawBounds& bounds, int16_t originX,
+                             uint16_t regionWidth) {
+  if (!bounds.valid || regionWidth == 0) return false;
+  const int16_t regionRight = originX + regionWidth - 1;
+  return bounds.left <= regionRight && bounds.right >= originX;
+}
+
 static bool EyeIntersectsRegion(const Eye& eye, int16_t originX,
                                 uint16_t regionWidth) {
   if (!eye.FinalConfig) return false;
@@ -832,22 +1177,41 @@ static bool EyeIntersectsRegion(const Eye& eye, int16_t originX,
                                 regionWidth);
 }
 
-static bool ZIntersectsRegion(const SleepZPlacement& z, int16_t originX,
-                              uint16_t regionWidth) {
-  return XRangeIntersectsRegion(z.centerX, 0.0f,
-                                (14.0f + 4.0f) * z.scale, originX,
-                                regionWidth);
+static bool SleepIndicatorIntersectsRegion(int16_t originX,
+                                           uint16_t regionWidth) {
+  return XRangeIntersectsRegion(272, 0.0f, 36.0f, originX, regionWidth);
 }
 
-// The sprite is already laid out as TFT_eSPI's byte-swapped 16-bit pixels.
-// Sending it directly avoids pushSprite()'s extra transaction setup for each
-// tile, while the caller keeps one write transaction for the complete frame.
-static void PushSpriteRegion(TFT_eSprite& source, int16_t originX,
-                             uint16_t regionWidth) {
-  tft.setWindow(originX, 0, originX + regionWidth - 1,
-                FRAME_SPRITE_HEIGHT - 1);
-  tft.pushPixels(source.getPointer(),
-                 (uint32_t)regionWidth * FRAME_SPRITE_HEIGHT);
+// Push only the dirty rectangle from the sprite. TFT_eSPI accepts one pixel
+// span per row inside the same address window, so the sprite's wider row stride
+// does not force a full-width or full-height transfer.
+static void PushSpriteRect(TFT_eSprite& source, int16_t originX,
+                           const DrawBounds& bounds) {
+  if (!bounds.valid) return;
+  const int32_t sourceWidth = source.width();
+  const int32_t sourceHeight = source.height();
+  const int32_t sourceLeft = bounds.left - originX;
+  const int32_t sourceRight = bounds.right - originX;
+  const int32_t left = sourceLeft < 0 ? 0 : sourceLeft;
+  const int32_t right = sourceRight >= sourceWidth
+      ? sourceWidth - 1 : sourceRight;
+  const int32_t top = bounds.top < 0 ? 0 : bounds.top;
+  const int32_t bottom = bounds.bottom >= sourceHeight
+      ? sourceHeight - 1 : bounds.bottom;
+  if (left > right || top > bottom) return;
+
+  const int32_t width = right - left + 1;
+  const int32_t height = bottom - top + 1;
+  uint16_t* pixels = static_cast<uint16_t*>(source.getPointer());
+  tft.setWindow(originX + left, top, originX + right, bottom);
+  if (left == 0 && width == sourceWidth) {
+    tft.pushPixels(pixels + top * sourceWidth,
+                   (uint32_t)width * height);
+    return;
+  }
+  for (int32_t y = top; y <= bottom; y++) {
+    tft.pushPixels(pixels + y * sourceWidth + left, width);
+  }
 }
 
 void Face::Draw() {
@@ -862,16 +1226,30 @@ void Face::Draw() {
   LeftEye.Update();
   RightEye.Update();
 
-  const bool showSleepZ = _sleeping ||
+  const bool showSleepIndicator = _sleeping ||
       (gPowerManager && gPowerManager->GetState() == PowerState::SLEEP);
+  const DrawBounds currentBounds = CurrentDrawBounds(
+      LeftEye, RightEye, showSleepIndicator);
+  DrawBounds dirtyBounds = currentBounds;
+  if (!_hasPresentedFrame) {
+    dirtyBounds.left = 0;
+    dirtyBounds.top = 0;
+    dirtyBounds.right = SCREEN_WIDTH - 1;
+    dirtyBounds.bottom = SCREEN_HEIGHT - 1;
+    dirtyBounds.valid = true;
+  } else if (_lastDrawBoundsValid) {
+    IncludeDrawBounds(dirtyBounds, _lastDrawLeft, _lastDrawTop,
+                      _lastDrawRight, _lastDrawBottom);
+  }
+
   if (_renderMode == RenderMode::DIRECT_TFT) {
-    tft.fillScreen(BG_COLOR);
-    EyeDrawer::Draw(tft, LeftEye.CenterX, CenterY, LeftEye.FinalConfig);
-    EyeDrawer::Draw(tft, RightEye.CenterX, CenterY, RightEye.FinalConfig);
-    if (showSleepZ) {
-      for (const SleepZPlacement& z : SLEEP_Z_LAYOUT) {
-        DrawZ(tft, z.centerX, z.centerY, EYE_COLOR, z.scale);
-      }
+    if (dirtyBounds.valid) {
+      tft.fillRect(dirtyBounds.left, dirtyBounds.top,
+                   dirtyBounds.right - dirtyBounds.left + 1,
+                   dirtyBounds.bottom - dirtyBounds.top + 1, BG_COLOR);
+      EyeDrawer::Draw(tft, LeftEye.CenterX, CenterY, LeftEye.FinalConfig);
+      EyeDrawer::Draw(tft, RightEye.CenterX, CenterY, RightEye.FinalConfig);
+      if (showSleepIndicator) DrawSleepIndicator(tft);
     }
   } else {
     auto drawFrameRegion = [&](int16_t originX, uint16_t regionWidth) {
@@ -885,12 +1263,9 @@ void Face::Draw() {
                         RightEye.FinalConfig);
       }
 
-      if (showSleepZ) {
-        for (const SleepZPlacement& z : SLEEP_Z_LAYOUT) {
-          if (ZIntersectsRegion(z, originX, regionWidth)) {
-            DrawZ(sprite, z.centerX - originX, z.centerY, EYE_COLOR, z.scale);
-          }
-        }
+      if (showSleepIndicator &&
+          SleepIndicatorIntersectsRegion(originX, regionWidth)) {
+        DrawSleepIndicator(sprite, originX);
       }
     };
 
@@ -898,44 +1273,69 @@ void Face::Draw() {
       // Reuse one full-height tile. Each object is rasterized only in the
       // tile it intersects; objects crossing x=FRAME_TILE_WIDTH are drawn in
       // both tiles and clipped by TFT_eSPI.
-      drawFrameRegion(0, FRAME_TILE_WIDTH);
-      bool oldSwapBytes = tft.getSwapBytes();
-      tft.setSwapBytes(false);
-      tft.startWrite();
-      PushSpriteRegion(sprite, 0, FRAME_TILE_WIDTH);
-      drawFrameRegion(FRAME_TILE_WIDTH, FRAME_TILE_WIDTH);
-      PushSpriteRegion(sprite, FRAME_TILE_WIDTH, FRAME_TILE_WIDTH);
-      tft.endWrite();
-      tft.setSwapBytes(oldSwapBytes);
+      if (dirtyBounds.valid) {
+        const bool drawLeft = BoundsIntersectX(dirtyBounds, 0,
+                                               FRAME_TILE_WIDTH);
+        const bool drawRight = BoundsIntersectX(dirtyBounds,
+            FRAME_TILE_WIDTH, FRAME_TILE_WIDTH);
+        if (drawLeft) drawFrameRegion(0, FRAME_TILE_WIDTH);
+        const bool oldSwapBytes = tft.getSwapBytes();
+        tft.setSwapBytes(false);
+        tft.startWrite();
+        if (drawLeft) PushSpriteRect(sprite, 0, dirtyBounds);
+        if (drawRight) {
+          drawFrameRegion(FRAME_TILE_WIDTH, FRAME_TILE_WIDTH);
+          PushSpriteRect(sprite, FRAME_TILE_WIDTH, dirtyBounds);
+        }
+        tft.endWrite();
+        tft.setSwapBytes(oldSwapBytes);
+      }
     } else {
-      drawFrameRegion(0, FRAME_SPRITE_WIDTH);
-      bool oldSwapBytes = tft.getSwapBytes();
-      tft.setSwapBytes(false);
-      tft.startWrite();
-      PushSpriteRegion(sprite, 0, FRAME_SPRITE_WIDTH);
-      tft.endWrite();
-      tft.setSwapBytes(oldSwapBytes);
+      if (dirtyBounds.valid) {
+        drawFrameRegion(0, FRAME_SPRITE_WIDTH);
+        const bool oldSwapBytes = tft.getSwapBytes();
+        tft.setSwapBytes(false);
+        tft.startWrite();
+        PushSpriteRect(sprite, 0, dirtyBounds);
+        tft.endWrite();
+        tft.setSwapBytes(oldSwapBytes);
+      }
     }
   }
-  _zzzDirty = false;
+  _hasPresentedFrame = true;
+  _lastDrawBoundsValid = currentBounds.valid;
+  if (currentBounds.valid) {
+    _lastDrawLeft = currentBounds.left;
+    _lastDrawTop = currentBounds.top;
+    _lastDrawRight = currentBounds.right;
+    _lastDrawBottom = currentBounds.bottom;
+  }
+  _sleepIndicatorDirty = false;
 
   uint32_t drawUs = micros() - drawStartUs;
   static uint32_t perfWindowStartMs = 0;
   static uint32_t perfFrames = 0;
   static uint32_t perfTotalUs = 0;
+  static uint32_t perfMaxDrawUs = 0;
+  static uint32_t perfOverBudgetFrames = 0;
 
   uint32_t nowMs = millis();
   if (perfWindowStartMs == 0) perfWindowStartMs = nowMs;
   perfFrames++;
   perfTotalUs += drawUs;
+  if (drawUs > perfMaxDrawUs) perfMaxDrawUs = drawUs;
+  if (drawUs > FRAME_INTERVAL_ACTIVE_MS * 1000UL) perfOverBudgetFrames++;
   if (nowMs - perfWindowStartMs >= 5000) {
     uint32_t windowMs = nowMs - perfWindowStartMs;
     float avgDrawUs = (float)perfTotalUs / perfFrames;
     float avgFps = perfFrames * 1000.0f / windowMs;
-    LOG_PRINTF("[PERF] avg_draw=%uus avg_fps=%.1f frames=%u\n",
-               (uint32_t)avgDrawUs, avgFps, perfFrames);
+    LOG_PRINTF("[PERF] avg_draw=%uus max_draw=%uus over_budget=%u avg_fps=%.1f frames=%u\n",
+               (uint32_t)avgDrawUs, perfMaxDrawUs, perfOverBudgetFrames,
+               avgFps, perfFrames);
     perfWindowStartMs = nowMs;
     perfFrames = 0;
     perfTotalUs = 0;
+    perfMaxDrawUs = 0;
+    perfOverBudgetFrames = 0;
   }
 }
