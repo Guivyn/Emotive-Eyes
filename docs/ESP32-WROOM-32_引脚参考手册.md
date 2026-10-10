@@ -1,48 +1,33 @@
-# ESP32-WROOM-32 多功能开发板 — 引脚与功能参考手册
+# HW-950 / ESP32-2432S024R 引脚与功能参考
 
----
+> 本文档面向仓库当前使用的 HW-950 板型。CYD 外观相近的开发板可能有不同的屏幕、引脚和供电电路；接线前请核对板卡型号与 PCB 丝印。项目当前引脚配置见 `src/board_config.h`。
 
-## 一、产品概览
+## 一、板载资源
 
 | 项目 | 说明 |
 |------|------|
-| 产品名称 | ESP32 WiFi+BT 双模开发板 |
+| 板型 | HW-950 / ESP32-2432S024R |
 | 主控模块 | ESP-WROOM-32 |
-| 尺寸 | 28.5 mm × 51.8 mm |
 | 板载屏幕 | 2.4" 电阻触摸屏，分辨率 320×240 (ST7796 驱动) |
-| 烧录接口 | Type-C |
-| 供电方式 | Type-C 供电 / 外接电池 |
-| 电池开关 | 点按一次开机，点按两次关机 |
+| 触摸控制器 | XPT2046 |
+| USB 接口 | Type-C，用于供电和串口连接 |
+| 电池接口 | 独立 BAT+/BAT− 端子；SW1 控制电池供电 |
 | 拓展接口 | 1.25mm 间距排针（I2C、串口等） |
 | 存储扩展 | TF 卡槽 (SPI) |
-| 音频 | 功放芯片 + 喇叭接口 (2p 1.25mm，支持 ≤ 2.5W / 4Ω) |
+| 音频 | 板载功放与喇叭接口 |
 
----
+电池充电芯片型号、充电电流和整机电池供电路径尚未通过原理图或实测确认，相关限制见[电池供电诊断](电池供电诊断.md)。
 
-## 二、ESP-WROOM-32 模块参数特性
+## 二、本项目的运行配置
 
 | 参数 | 规格 |
 |------|------|
-| Wi-Fi | 802.11 b/g/n，支持 STA / AP / STA+AP 模式 |
-| 蓝牙 | 蓝牙 4.2 BR/EDR + BLE |
-| CPU | 双核 32 位 Xtensa LX6，主频最高 240 MHz |
-| 算力 | 600 DMIPS |
-| SRAM | 520 KB |
-| SPI Flash | 默认 32 Mbit |
-| 支持接口 | UART、SPI、SDIO、I2C、I2S、PWM、IR、ADC、DAC |
-| 片上传感器 | 霍尔传感器、温度传感器、电容触摸传感器 |
-| IO 口数量 | 22 个 |
-| 串口速率 | 默认 115200 bps |
-| 频谱范围 | 2412 ~ 2484 MHz |
-| 天线 | 板载 PCB 天线，增益 2 dBi |
-| 发射功率 | 802.11b: 17±2 dBm (@11 Mbps)；802.11g: 14±2 dBm (@54 Mbps)；802.11n: 13±2 dBm (@MCS7) |
-| 接收灵敏度 | CCK 1 Mbps: -90 dBm；CCK 11 Mbps: -85 dBm；6 Mbps: -88 dBm；54 Mbps: -70 dBm；MCS7: -67 dBm |
-| 安全性 | WPA / WPA2 / WPA2-Enterprise / WPS |
-| 休眠 | 深度休眠电流低至 6.5 μA |
-| 固件升级 | 本地串口升级 / 远程 FOTA |
-| 配网方式 | Smart Config、AirKiss 一键配网 |
-| 软件生态 | 内嵌 LwIP、FreeRTOS，支持通用 AT 指令 |
-| 调试接口 | OpenOCD |
+| 默认 CPU | 常亮与电池固件 ACTIVE 档 80MHz |
+| 表情测试 CPU | `esp32dev_expression_test` 使用 240MHz |
+| 屏幕逻辑分辨率 | 320×240，横屏 |
+| TFT SPI 时钟 | 80MHz |
+| 触摸 SPI 时钟 | 2.5MHz |
+| 构建方式 | PlatformIO；环境和烧录命令见根目录 README |
 
 ---
 
@@ -68,7 +53,7 @@
 | TFT_DC   | GPIO2  |
 | TFT_BL（背光） | GPIO27 |
 
-> **注意**：GPIO4 在此开发板上同时被 RGB LED 占用。如果 TFT_eSPI 驱动将 TFT_RST 配置为 GPIO4，会导致电平冲突。建议将 TFT_RST 设为 -1（不使用软复位），或换用空闲 GPIO。
+> 本项目将 `TFT_RST` 设为 `-1`，不占用 GPIO。HW-950 的 GPIO4 接板载 RGB LED；不要将 `TFT_RST` 改配为 GPIO4。
 
 ### 4.1.1 触摸控制器 — XPT2046（与 TFT 共用 SPI）
 
@@ -100,7 +85,7 @@
 | RGB LED | GPIO17 / GPIO4 / GPIO16 |
 | 光敏电阻 | GPIO34 (ADC1_CH6, Input Only) |
 
-> **GPIO4 复用冲突**：GPIO4 同时作为 RGB LED 通道和 TFT_RST（显示屏复位）。在 TFT_eSPI 的 `User_Setup.h` 中如定义 `TFT_RST 4`，初始化时拉低/拉高操作会导致 LED 闪烁。优先方案：将 TFT_RST 设为 -1 禁用软复位，利用屏幕模组的硬件上电复位。
+> **GPIO4 使用说明**：HW-950 将 GPIO4 接到 RGB LED 的绿色通道。本项目的 `TFT_RST=-1`，所以当前 TFT 配置不会使用 GPIO4；若迁移到其他板型，应先核对屏幕复位线和 LED 接线。
 
 ---
 
@@ -141,9 +126,9 @@
 
 | 方式 | 说明 |
 |------|------|
-| Type-C | 数据传输 + 供电，支持烧录程序 |
-| 电池端子 | 连接外接电池，支持充电 |
-| 电池开关 | 点按一次 → 开机；点按两次 → 关机 |
+| Type-C | USB 数据/串口连接与供电，可用于烧录程序 |
+| 电池端子 | 外接电池接口；充电电路型号与参数尚未实测确认 |
+| SW1 | 板级电源开关；随板说明书标注单击开机、双击关机 |
 
 ---
 
@@ -154,7 +139,7 @@
 | GPIO1 | UART TX | 串口输出 |
 | GPIO3 | UART RX | 串口输入 |
 | GPIO2 | TFT_DC | 显示 |
-| GPIO4 | RGB LED / TFT_RST | ⚠️ 与 TFT_RST 共用，见 4.3 节 |
+| GPIO4 | RGB LED 绿色通道 | 本项目 `TFT_RST=-1`，未与屏幕复位脚复用 |
 | GPIO5 | TF_CS | TF 卡 |
 | GPIO12 | TFT_MISO / TOUCH_MISO | 共用 SPI |
 | GPIO13 | TFT_MOSI / TOUCH_MOSI | 共用 SPI |
@@ -195,13 +180,9 @@ ESP32 的 GPIO34、GPIO35、GPIO36（SENSOR_VP）、GPIO39（SENSOR_VN）是**�
 - 无外部上拉时可能随机跳变，导致 LightSleep 唤醒行为不可靠
 - 未启用 LightSleep 时无需连接该信号，触摸仍通过共享 SPI 工作
 
-### 8.3 GPIO4 复用冲突
+### 8.3 GPIO4 与 TFT 复位配置
 
-GPIO4 同时连接 RGB LED 和 TFT 复位引脚（TFT_RST）。如果 `User_Setup.h` 中定义 `TFT_RST 4`：
-
-- TFT_eSPI 初始化时拉低 RST 会导致 LED 异常闪烁
-- LED 驱动的电平变化可能干扰屏幕复位时序
-- **建议**：将 `TFT_RST` 设为 `-1`（禁用软复位），依赖屏幕模组的硬件上电复位
+HW-950 的 GPIO4 接到 RGB LED 绿色通道。本项目将 `TFT_RST` 配置为 `-1`，因此不会驱动 GPIO4 作为屏幕复位脚。若改用其他板型或自行修改 TFT 配置，应先核对 PCB 接线，避免把 TFT 复位信号接到被 LED 使用的 GPIO。
 
 ### 8.4 触摸 SPI 引脚
 

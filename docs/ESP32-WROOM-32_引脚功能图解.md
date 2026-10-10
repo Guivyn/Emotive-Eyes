@@ -115,39 +115,23 @@
 >
 > **⚡ 触摸控制器 (XPT2046)**：当前固件使用与 TFT 共用的 IO12/13/14，并通过 SPI Z 轴压力判断按下，不依赖 IRQ。只有启用 `POWER_LIGHT_SLEEP_ENABLED=1` 时，才需要将 IRQ 接到 IO36，并补 10kΩ 上拉至 3.3V。
 >
-> **⚡ GPIO4 冲突**：GPIO4 同时用作 RGB LED 和 TFT_RST。将 `TFT_RST` 设为 `-1` 可避免冲突。
+> **GPIO4 使用说明**：HW-950 的 GPIO4 接 RGB LED 绿色通道；本项目将 `TFT_RST` 配置为 `-1`，不会用 GPIO4 复位屏幕。迁移到其他板型时请重新核对接线。
 
 ---
 
-## 八、快速开发参考
+## 八、项目配置与引脚复用
 
-### 开始编程
+本项目使用 PlatformIO 构建，构建环境和烧录命令见根目录 [README](../README.md)。本图是硬件引脚示意，不是通用 Arduino、ESP-IDF 或 MicroPython 配置指南。
 
-建议使用 **Arduino IDE** 或 **ESP-IDF**（乐鑫官方框架）：
+板载外设未使用时，以下 GPIO 可考虑复用；操作前请核对启动绑带、电路连接和 ESP32 的输入/输出限制：
 
-| 平台 | 说明 |
-|------|------|
-| **Arduino IDE** | 安装 ESP32 板支持包，选择 "ESP32 Dev Module" |
-| **ESP-IDF** | 乐鑫官方 SDK，更底层、更灵活 |
-| **MicroPython** | 可刷入 MicroPython 固件，Python 上手 |
+- **GPIO0** — BOOT/启动绑带，电平会影响启动模式。
+- **GPIO4 / GPIO16 / GPIO17** — 板载 RGB LED；HW-950 上 GPIO4 为绿色通道。
+- **GPIO21 / GPIO22** — I2C 扩展接口。
+- **GPIO34 / GPIO35** — 仅输入，可作为 ADC 输入。
+- **GPIO26** — 音频输出，未使用板载功放时才考虑复用。
 
-### 烧录注意事项
-
-- 按住 **BOOT** → 按一下 **RST** → 松开 BOOT 进入下载模式
-- 串口速率默认 **115200 bps**
-- 部分 GPIO (如 GPIO2) 上电时会影响启动，避免外部拉低
-
-### 可用 GPIO 参考
-
-以下 GPIO 在板载外设未启用时可复用：
-
-- **GPIO0** — 注意上拉启动约束
-- **GPIO4 / GPIO16 / GPIO17** — RGB LED，可复用为普通 GPIO（LED 不亮时）
-- **GPIO21 / GPIO22** — I2C，可复用
-- **GPIO34 / GPIO35** — 仅输入模式，可做 ADC 输入
-- **GPIO26** — 音频输出，未使用喇叭时可复用
-
-### ADC 可用通道
+### ADC 通道参考
 
 | ADC | 通道 | GPIO |
 |-----|------|------|
